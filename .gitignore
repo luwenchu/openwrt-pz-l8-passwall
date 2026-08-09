@@ -1,4 +1,4 @@
 work/
 output/
 *.log
-
+failed-job-*.log

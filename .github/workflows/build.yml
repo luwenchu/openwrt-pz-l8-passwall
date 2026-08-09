@@ -1,4 +1,4 @@
-name: Build PZ-L8 Nwrt PassWall firmware
+name: Build PZL8 PassWall firmware
 
 on:
   workflow_dispatch:
@@ -45,8 +45,7 @@ jobs:
       - name: Upload verified firmware
         uses: actions/upload-artifact@v4
         with:
-          name: pzl8-nwrt-passwall-${{ github.sha }}
+          name: pzl8-passwall-${{ github.sha }}
           path: output/
           if-no-files-found: error
           retention-days: 30
-

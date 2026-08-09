@@ -1,6 +1,6 @@
-# CMCC PZ-L8 Nwrt PassWall 测试固件
+# CMCC PZL8 PassWall 测试固件
 
-本仓库以 `Nwrt-2025-01-03` 的 CMCC PZ-L8 factory 固件为基底，在不替换原有
+本仓库以 `PZL8-2025-01-03` 的 CMCC PZ-L8 factory 固件为基底，在不替换原有
 Linux 5.4、32 位 QSDK、Qualcomm 专有 WiFi 和 NSS 驱动的前提下，预置精简版
 PassWall。
 
@@ -10,6 +10,7 @@ PassWall。
 - PassWall 只启用 nftables 透明代理。
 - 只预置 Xray 核心，不加入 Sing-Box、SSR、Hysteria、NaiveProxy 等额外核心。
 - 包含 PassWall 中文 LuCI 翻译。
+- LuCI 发行版名称和 SSH 登录横幅显示为 `PZL8`。
 - PassWall 默认关闭，刷机后由用户配置节点并手动启用。
 - 新增文件写入预格式化的 `rootfs_data` overlay，原只读 rootfs 不修改。
 
@@ -29,7 +30,7 @@ b2464663e4d0693b5869c277d61542258b3562c40bfed3353faf071155fad7e3
 
 GitHub Actions 输出：
 
-- `Nwrt-2025-01-03-pzl8-passwall-nft-xray-factory.bin`
+- `PZL8-2025-01-03-passwall-nft-xray-factory.bin`
 - `sha256sums`
 - `build-manifest.txt`
 - `passwall-packages.txt`
@@ -42,4 +43,3 @@ GitHub Actions 输出：
 CI 成功仅证明软件包构建、固件尺寸和静态结构校验通过。实体启动、无线可见性、
 NSS 状态、有线/无线千兆性能仍需在 PZ-L8 上刷机验证。首次测试应保留 TTL 和
 initramfs 救援条件，不要擦除 ART、bootconfig 或其他校准分区。
-

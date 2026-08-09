@@ -12,7 +12,7 @@ ubi_root="$work/rootfs-data"
 upper="$ubi_root/upper"
 output="$repo_root/output"
 sdk="$work/sdk"
-firmware_name="Nwrt-2025-01-03-pzl8-passwall-nft-xray-factory.bin"
+firmware_name="PZL8-2025-01-03-passwall-nft-xray-factory.bin"
 
 echo "$BASE_SHA256  $base" | sha256sum -c -
 rm -rf "$volumes" "$rootfs" "$ubi_root" "$output"
@@ -28,6 +28,27 @@ python3 "$repo_root/scripts/install_ipks.py" \
   --base-status "$rootfs/usr/lib/opkg/status" \
   --root "$upper" \
   luci-app-passwall luci-i18n-passwall-zh-cn xray-core
+
+mkdir -p "$upper/etc"
+cat > "$upper/etc/openwrt_release" <<'EOF'
+DISTRIB_ID='PZL8'
+DISTRIB_RELEASE='23.05-SNAPSHOT'
+DISTRIB_REVISION='r0-6dee7e355-passwall'
+DISTRIB_TARGET='ipq50xx/ipq50xx_32'
+DISTRIB_ARCH='arm_cortex-a7_neon-vfpv4'
+DISTRIB_DESCRIPTION='PZL8 23.05-SNAPSHOT r0-6dee7e355 PassWall'
+DISTRIB_TAINTS='no-all busybox override'
+EOF
+cat > "$upper/etc/banner" <<'EOF'
+ ____  ______ _      ___
+|  _ \|__  /| |    / _ \
+| |_) | / / | |   | (_) |
+|  __/ / /_ | |___ > _ <
+|_|   /____||_____/|_| |_|
+----------------------------
+PZL8 23.05-SNAPSHOT PassWall
+----------------------------
+EOF
 
 test -f "$upper/etc/config/passwall"
 test -f "$upper/usr/share/luci/menu.d/luci-app-passwall.json" -o \
@@ -123,6 +144,6 @@ rootfs_preserved=yes
 passwall_mode=nftables
 passwall_core=xray
 passwall_default_enabled=no
+display_name=PZL8
 xray_file=$(cat "$work/xray-file.txt")
 EOF
-
