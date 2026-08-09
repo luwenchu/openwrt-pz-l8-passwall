@@ -22,7 +22,7 @@ python3 "$repo_root/scripts/extract_ubi.py" "$base" "$volumes"
 test "$(stat -c %s "$volumes/kernel.bin")" -eq 3921808
 test "$(stat -c %s "$volumes/rootfs.squashfs")" -eq 29874708
 
-unsquashfs -d "$rootfs" "$volumes/rootfs.squashfs" >/dev/null
+sudo unsquashfs -d "$rootfs" "$volumes/rootfs.squashfs" >/dev/null
 python3 "$repo_root/scripts/install_ipks.py" \
   --ipk-root "$sdk/bin/packages" \
   --base-status "$rootfs/usr/lib/opkg/status" \
