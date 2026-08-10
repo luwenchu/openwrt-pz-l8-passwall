@@ -59,6 +59,10 @@ cp -f /rom/etc/openwrt_release /etc/openwrt_release
 uci -q set system.@system[0].hostname='PZL8'
 uci -q commit system
 
+uci -q set wireless.wifinet0.ssid='PZL8_2.4G_0'
+uci -q set wireless.wifinet1.ssid='PZL8_5G_1'
+uci -q commit wireless
+
 [ ! -s /etc/config/passwall ] &&
   cp -f /usr/share/passwall/0_default_config /etc/config/passwall
 uci -q set passwall.@global[0].enabled='0'
@@ -128,6 +132,10 @@ require_file "$rootfs/lib/upgrade/platform.sh"
 grep -Fq "tr '\\000' '\\n' < /proc/device-tree/compatible" \
   "$rootfs/lib/upgrade/platform.sh"
 grep -Fq "cmcc,pzl8" "$rootfs/lib/upgrade/platform.sh"
+grep -Fq "wireless.wifinet0.ssid='PZL8_2.4G_0'" \
+  "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
+grep -Fq "wireless.wifinet1.ssid='PZL8_5G_1'" \
+  "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
 
 if [ -e "$rootfs/usr/bin/mosdns" ] || [ -e "$rootfs/usr/bin/v2dat" ]; then
   echo "MosDNS executables were not removed before SquashFS packing" >&2
