@@ -69,10 +69,48 @@ rm -f /tmp/luci-indexcache /tmp/luci-indexcache.*
 rm -rf /tmp/luci-modulecache/
 exit 0
 EOF
+cat > "$work/platform.sh" <<'EOF'
+#!/bin/sh
+. /lib/functions/system.sh
+
+platform_check_image() {
+	return 0
+}
+
+platform_do_upgrade() {
+	local board part
+
+	board="$(
+		tr '\000' '\n' < /proc/device-tree/compatible |
+			grep -m1 -E '^(cmcc,pzl8|cmcc,rax3000qy|redmi,ax3000-m79|redmi,ax3000-m81|cucc,vs010|rg,ma3063|axfh3)$'
+	)"
+
+	case "$board" in
+		cmcc,pzl8|\
+		cmcc,rax3000qy|\
+		redmi,ax3000-m79|\
+		redmi,ax3000-m81|\
+		cucc,vs010|\
+		rg,ma3063|\
+		axfh3)
+			part="$(sed -n 's/.*ubi.mtd=\([^ ]*\).*/\1/p' /proc/cmdline)"
+			[ -n "$part" ] || part=rootfs
+			CI_UBIPART="$part"
+			CI_KERNPART="kernel"
+			nand_do_upgrade "$1"
+			;;
+		*)
+			echo "Sysupgrade is not supported on your board($board) yet."
+			return 1
+			;;
+	esac
+}
+EOF
 sudo install -D -m 0644 "$work/openwrt_release" "$rootfs/etc/openwrt_release"
 sudo install -D -m 0644 "$work/banner" "$rootfs/etc/banner"
 sudo install -D -m 0755 "$work/99-pzl8-passwall-rootfs" \
   "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
+sudo install -D -m 0755 "$work/platform.sh" "$rootfs/lib/upgrade/platform.sh"
 
 require_file() {
   if [ ! -f "$1" ]; then
@@ -85,6 +123,11 @@ require_file "$rootfs/usr/share/passwall/0_default_config"
 require_file "$rootfs/etc/uci-defaults/luci-passwall"
 require_file "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
 require_file "$rootfs/usr/lib/lua/luci/controller/passwall.lua"
+require_file "$rootfs/lib/upgrade/platform.sh"
+
+grep -Fq "tr '\\000' '\\n' < /proc/device-tree/compatible" \
+  "$rootfs/lib/upgrade/platform.sh"
+grep -Fq "cmcc,pzl8" "$rootfs/lib/upgrade/platform.sh"
 
 if [ -e "$rootfs/usr/bin/mosdns" ] || [ -e "$rootfs/usr/bin/v2dat" ]; then
   echo "MosDNS executables were not removed before SquashFS packing" >&2
@@ -225,5 +268,6 @@ passwall_mode=nftables
 passwall_core=xray
 passwall_default_enabled=no
 display_name=PZL8
+sysupgrade_board_parser=fixed
 xray_file=$(cat "$work/xray-file.txt")
 EOF

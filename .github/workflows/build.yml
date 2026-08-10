@@ -74,6 +74,7 @@ jobs:
           Base kernel, DTB, QSDK WiFi and NSS stack are preserved.
           PassWall and Xray are embedded in the repacked SquashFS and disabled by default.
           MosDNS and its dedicated v2dat helper are removed to provide rootfs capacity.
+          The CMCC PZL8 sysupgrade board parser is fixed.
           Physical boot and throughput still require router testing."
 
           if gh release view "$tag" >/dev/null 2>&1; then
