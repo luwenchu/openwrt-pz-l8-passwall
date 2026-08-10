@@ -118,11 +118,44 @@ def dependency_choices(value):
     return result
 
 
+def remove_package(root, status_path, package):
+    info_dir = root / "usr/lib/opkg/info"
+    list_path = info_dir / f"{package}.list"
+    if list_path.exists():
+        for entry in list_path.read_text(errors="replace").splitlines():
+            relative = entry.lstrip("/")
+            if not relative:
+                continue
+            path = root / relative
+            if path.is_symlink() or path.is_file():
+                path.unlink()
+        list_path.unlink()
+
+    for path in info_dir.glob(f"{package}.*"):
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+
+    paragraphs = status_path.read_text(errors="replace").split("\n\n")
+    kept = [
+        paragraph for paragraph in paragraphs
+        if not re.search(
+            rf"^Package:\s*{re.escape(package)}\s*$",
+            paragraph,
+            flags=re.MULTILINE,
+        )
+    ]
+    status_path.write_text(
+        "\n\n".join(paragraph for paragraph in kept if paragraph.strip()) + "\n",
+        encoding="utf-8",
+    )
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ipk-root", type=pathlib.Path, required=True)
     parser.add_argument("--base-status", type=pathlib.Path, required=True)
     parser.add_argument("--root", type=pathlib.Path, required=True)
+    parser.add_argument("--remove-package", action="append", default=[])
     parser.add_argument("packages", nargs="+")
     args = parser.parse_args()
 
@@ -130,6 +163,8 @@ def main():
     status_path = args.root / "usr/lib/opkg/status"
     status_path.parent.mkdir(parents=True, exist_ok=True)
     status_path.write_bytes(args.base_status.read_bytes())
+    for package in args.remove_package:
+        remove_package(args.root, status_path, package)
 
     package_files = {}
     controls = {}
@@ -153,7 +188,7 @@ def main():
             if provided:
                 providers.setdefault(provided, name)
 
-    installed = installed_from_status(args.base_status)
+    installed = installed_from_status(status_path)
     selected = []
     visiting = set()
 

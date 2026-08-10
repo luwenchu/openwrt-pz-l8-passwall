@@ -6,13 +6,15 @@ PassWall。
 
 ## 固件策略
 
-- 保留原固件 kernel、DTB、SquashFS 和硬件驱动，不混入其他内核模块。
+- 保留原固件 kernel、DTB 和硬件驱动，不混入其他内核模块。
+- 将 PassWall/Xray 写入只读 SquashFS，保留配置刷机也不会覆盖插件。
+- 移除 MosDNS 及其 LuCI 文件，为 PassWall/Xray 腾出 SquashFS 空间。
 - PassWall 只启用 nftables 透明代理。
 - 只预置 Xray 核心，不加入 Sing-Box、SSR、Hysteria、NaiveProxy 等额外核心。
 - 包含 PassWall 中文 LuCI 翻译。
 - LuCI 发行版名称和 SSH 登录横幅显示为 `PZL8`。
 - PassWall 默认关闭，刷机后由用户配置节点并手动启用。
-- 新增文件写入预格式化的 `rootfs_data` overlay，原只读 rootfs 不修改。
+- `rootfs_data` 保持空白并自动扩容；原有配置可继续覆盖只读 rootfs。
 
 ## 固定版本
 
@@ -30,7 +32,7 @@ b2464663e4d0693b5869c277d61542258b3562c40bfed3353faf071155fad7e3
 
 GitHub Actions 输出：
 
-- `PZL8-2025-01-03-passwall-nft-xray-factory.bin`
+- `PZL8-2025-01-03-passwall-nft-xray-rootfs-factory.bin`
 - `sha256sums`
 - `build-manifest.txt`
 - `passwall-packages.txt`

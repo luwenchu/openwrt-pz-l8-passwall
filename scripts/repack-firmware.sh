@@ -9,29 +9,30 @@ work="$repo_root/work"
 volumes="$work/volumes"
 rootfs="$work/rootfs"
 ubi_root="$work/rootfs-data"
-upper="$ubi_root/upper"
 output="$repo_root/output"
 package_cache="$work/package-cache"
-firmware_name="PZL8-2025-01-03-passwall-nft-xray-factory.bin"
+firmware_name="PZL8-2025-01-03-passwall-nft-xray-rootfs-factory.bin"
 
 echo "$BASE_SHA256  $base" | sha256sum -c -
 test -d "$package_cache"
 rm -rf "$volumes" "$rootfs" "$ubi_root" "$output"
-mkdir -p "$volumes" "$upper" "$ubi_root/work" "$output"
+mkdir -p "$volumes" "$ubi_root/upper" "$ubi_root/work" "$output"
 
 python3 "$repo_root/scripts/extract_ubi.py" "$base" "$volumes"
 test "$(stat -c %s "$volumes/kernel.bin")" -eq 3921808
 test "$(stat -c %s "$volumes/rootfs.squashfs")" -eq 29874708
 
 sudo unsquashfs -d "$rootfs" "$volumes/rootfs.squashfs" >/dev/null
-python3 "$repo_root/scripts/install_ipks.py" \
+sudo python3 "$repo_root/scripts/install_ipks.py" \
   --ipk-root "$package_cache" \
   --base-status "$rootfs/usr/lib/opkg/status" \
-  --root "$upper" \
+  --root "$rootfs" \
+  --remove-package mosdns \
+  --remove-package luci-app-mosdns \
+  --remove-package luci-i18n-mosdns-zh-cn \
   luci-app-passwall luci-i18n-passwall-zh-cn xray-core
 
-mkdir -p "$upper/etc"
-cat > "$upper/etc/openwrt_release" <<'EOF'
+cat > "$work/openwrt_release" <<'EOF'
 DISTRIB_ID='PZL8'
 DISTRIB_RELEASE='23.05-SNAPSHOT'
 DISTRIB_REVISION='r0-6dee7e355-passwall'
@@ -40,7 +41,7 @@ DISTRIB_ARCH='arm_cortex-a7_neon-vfpv4'
 DISTRIB_DESCRIPTION='PZL8 23.05-SNAPSHOT r0-6dee7e355 PassWall'
 DISTRIB_TAINTS='no-all busybox override'
 EOF
-cat > "$upper/etc/banner" <<'EOF'
+cat > "$work/banner" <<'EOF'
  ____  ______ _      ___
 |  _ \|__  /| |    / _ \
 | |_) | / / | |   | (_) |
@@ -50,6 +51,27 @@ cat > "$upper/etc/banner" <<'EOF'
 PZL8 23.05-SNAPSHOT PassWall
 ----------------------------
 EOF
+cat > "$work/99-pzl8-passwall-rootfs" <<'EOF'
+#!/bin/sh
+
+cp -f /rom/etc/openwrt_release /etc/openwrt_release
+uci -q set system.@system[0].hostname='PZL8'
+uci -q commit system
+
+[ ! -s /etc/config/passwall ] &&
+  cp -f /usr/share/passwall/0_default_config /etc/config/passwall
+uci -q set passwall.@global[0].enabled='0'
+uci -q commit passwall
+/etc/init.d/passwall disable >/dev/null 2>&1 || true
+
+rm -f /tmp/luci-indexcache /tmp/luci-indexcache.*
+rm -rf /tmp/luci-modulecache/
+exit 0
+EOF
+sudo install -D -m 0644 "$work/openwrt_release" "$rootfs/etc/openwrt_release"
+sudo install -D -m 0644 "$work/banner" "$rootfs/etc/banner"
+sudo install -D -m 0755 "$work/99-pzl8-passwall-rootfs" \
+  "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
 
 require_file() {
   if [ ! -f "$1" ]; then
@@ -58,24 +80,33 @@ require_file() {
   fi
 }
 
-require_file "$upper/usr/share/passwall/0_default_config"
-require_file "$upper/etc/uci-defaults/luci-passwall"
-require_file "$upper/usr/lib/lua/luci/controller/passwall.lua"
+require_file "$rootfs/usr/share/passwall/0_default_config"
+require_file "$rootfs/etc/uci-defaults/luci-passwall"
+require_file "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
+require_file "$rootfs/usr/lib/lua/luci/controller/passwall.lua"
 
 if ! grep -Eq "option enabled ['\"]0['\"]" \
-  "$upper/usr/share/passwall/0_default_config"; then
+  "$rootfs/usr/share/passwall/0_default_config"; then
   echo "PassWall default template is not disabled" >&2
   exit 1
 fi
 
-xray_path="$(find "$upper/usr" -type f -name xray -print -quit)"
+xray_path="$(find "$rootfs/usr" -type f -name xray -print -quit)"
 if [ -z "$xray_path" ]; then
-  echo "Xray executable is missing from the overlay" >&2
+  echo "Xray executable is missing from the rootfs" >&2
   exit 1
 fi
 file "$xray_path" | tee "$work/xray-file.txt"
 if ! grep -Eq 'ELF 32-bit.*ARM' "$work/xray-file.txt"; then
   echo "Xray is not an ARM 32-bit executable" >&2
+  exit 1
+fi
+
+sudo mksquashfs "$rootfs" "$work/rootfs-passwall.squashfs" \
+  -comp xz -b 256K -no-xattrs -noappend >/dev/null
+rootfs_size="$(stat -c %s "$work/rootfs-passwall.squashfs")"
+if [ "$rootfs_size" -gt 29966336 ]; then
+  echo "PassWall SquashFS exceeds the 236 LEB rootfs volume: $rootfs_size" >&2
   exit 1
 fi
 
@@ -107,7 +138,7 @@ vol_size=3936256
 
 [rootfs]
 mode=ubi
-image=$volumes/rootfs.squashfs
+image=$work/rootfs-passwall.squashfs
 vol_id=1
 vol_type=dynamic
 vol_name=rootfs
@@ -135,9 +166,25 @@ fi
 python3 "$repo_root/scripts/extract_ubi.py" \
   "$output/$firmware_name" "$work/verify-volumes"
 cmp "$volumes/kernel.bin" "$work/verify-volumes/kernel.bin"
-cmp "$volumes/rootfs.squashfs" "$work/verify-volumes/rootfs.squashfs"
+if cmp -s "$volumes/rootfs.squashfs" "$work/verify-volumes/rootfs.squashfs"; then
+  echo "Repacked rootfs unexpectedly matches the base rootfs" >&2
+  exit 1
+fi
 
-cp "$ubi_root/passwall-packages.txt" "$output/passwall-packages.txt"
+unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  usr/share/passwall/0_default_config >/dev/null
+unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  usr/bin/xray > "$work/verify-xray"
+file "$work/verify-xray" | tee "$work/verify-xray-file.txt"
+grep -Eq 'ELF 32-bit.*ARM' "$work/verify-xray-file.txt"
+
+if unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  usr/bin/mosdns >/dev/null 2>&1; then
+  echo "MosDNS was not removed from the repacked rootfs" >&2
+  exit 1
+fi
+
+cp "$work/passwall-packages.txt" "$output/passwall-packages.txt"
 (
   cd "$output"
   sha256sum "$firmware_name" > sha256sums
@@ -150,13 +197,15 @@ output_file=$firmware_name
 output_sha256=$(sha256sum "$output/$firmware_name" | awk '{print $1}')
 output_size=$firmware_size
 kernel_size=$(stat -c %s "$volumes/kernel.bin")
-rootfs_size=$(stat -c %s "$volumes/rootfs.squashfs")
+rootfs_size=$rootfs_size
 rootfs_data_ubifs_size=$overlay_size
 rootfs_data_min_lebs=$rootfs_data_lebs
 rootfs_data_autoresize=yes
 architecture=arm_cortex-a7_neon-vfpv4
 kernel_preserved=yes
-rootfs_preserved=yes
+rootfs_repacked=yes
+passwall_location=squashfs
+removed_packages=mosdns,luci-app-mosdns,luci-i18n-mosdns-zh-cn
 passwall_mode=nftables
 passwall_core=xray
 passwall_default_enabled=no
