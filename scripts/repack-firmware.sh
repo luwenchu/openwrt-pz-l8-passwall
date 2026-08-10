@@ -115,6 +115,12 @@ sudo install -D -m 0644 "$work/banner" "$rootfs/etc/banner"
 sudo install -D -m 0755 "$work/99-pzl8-passwall-rootfs" \
   "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
 sudo install -D -m 0755 "$work/platform.sh" "$rootfs/lib/upgrade/platform.sh"
+sudo install -D -m 0644 "$repo_root/scripts/xray-legacy-compat.lua" \
+  "$rootfs/usr/share/passwall/xray_legacy_compat.lua"
+sudo python3 "$repo_root/scripts/patch-passwall-xray-legacy.py" \
+  "$rootfs/usr/share/passwall/app.sh"
+sudo python3 "$repo_root/scripts/patch-passwall-nft-reject.py" \
+  "$rootfs/usr/share/passwall/nftables.sh"
 
 require_file() {
   if [ ! -f "$1" ]; then
@@ -128,6 +134,9 @@ require_file "$rootfs/etc/uci-defaults/luci-passwall"
 require_file "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
 require_file "$rootfs/usr/lib/lua/luci/controller/passwall.lua"
 require_file "$rootfs/lib/upgrade/platform.sh"
+require_file "$rootfs/usr/share/passwall/app.sh"
+require_file "$rootfs/usr/share/passwall/xray_legacy_compat.lua"
+require_file "$rootfs/usr/share/passwall/nftables.sh"
 
 grep -Fq "tr '\\000' '\\n' < /proc/device-tree/compatible" \
   "$rootfs/lib/upgrade/platform.sh"
@@ -136,6 +145,17 @@ grep -Fq "wireless.wifinet0.ssid='PZL8_2.4G_0'" \
   "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
 grep -Fq "wireless.wifinet1.ssid='PZL8_5G_1'" \
   "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
+test "$(grep -Fc "xray_legacy_compat.lua" \
+  "$rootfs/usr/share/passwall/app.sh")" -eq 1
+grep -Fq "if \$XRAY_BIN version 2>/dev/null | head -n1 | grep -q '^Xray 1\\.'; then" \
+  "$rootfs/usr/share/passwall/app.sh"
+sh -n "$rootfs/usr/share/passwall/app.sh"
+if grep -Fq "counter reject" "$rootfs/usr/share/passwall/nftables.sh"; then
+  echo "Unsupported nftables reject action remains in PassWall" >&2
+  exit 1
+fi
+grep -Fq "counter drop" "$rootfs/usr/share/passwall/nftables.sh"
+sh -n "$rootfs/usr/share/passwall/nftables.sh"
 
 if [ -e "$rootfs/usr/bin/mosdns" ] || [ -e "$rootfs/usr/bin/v2dat" ]; then
   echo "MosDNS executables were not removed before SquashFS packing" >&2
@@ -236,6 +256,23 @@ unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   usr/bin/xray > "$work/verify-xray"
 file "$work/verify-xray" | tee "$work/verify-xray-file.txt"
 grep -Eq 'ELF 32-bit.*ARM' "$work/verify-xray-file.txt"
+unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  usr/share/passwall/app.sh > "$work/verify-passwall-app.sh"
+unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  usr/share/passwall/xray_legacy_compat.lua > "$work/verify-xray-legacy-compat.lua"
+unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  usr/share/passwall/nftables.sh > "$work/verify-passwall-nftables.sh"
+test "$(grep -Fc "xray_legacy_compat.lua" \
+  "$work/verify-passwall-app.sh")" -eq 1
+sh -n "$work/verify-passwall-app.sh"
+cmp "$repo_root/scripts/xray-legacy-compat.lua" \
+  "$work/verify-xray-legacy-compat.lua"
+if grep -Fq "counter reject" "$work/verify-passwall-nftables.sh"; then
+  echo "Repacked rootfs still contains unsupported nftables reject actions" >&2
+  exit 1
+fi
+grep -Fq "counter drop" "$work/verify-passwall-nftables.sh"
+sh -n "$work/verify-passwall-nftables.sh"
 
 if unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   usr/bin/mosdns >/dev/null 2>&1; then
@@ -274,6 +311,8 @@ passwall_location=squashfs
 removed_packages=mosdns,luci-app-mosdns,luci-i18n-mosdns-zh-cn,v2dat
 passwall_mode=nftables
 passwall_core=xray
+passwall_xray_1x_compat=yes
+passwall_nft_block_action=drop
 passwall_default_enabled=no
 display_name=PZL8
 sysupgrade_board_parser=fixed
