@@ -111,8 +111,10 @@ fi
 sudo mksquashfs "$rootfs" "$work/rootfs-passwall.squashfs" \
   -comp xz -Xbcj arm -b 256K -no-xattrs -noappend >/dev/null
 rootfs_size="$(stat -c %s "$work/rootfs-passwall.squashfs")"
-if [ "$rootfs_size" -gt 29966336 ]; then
-  echo "PassWall SquashFS exceeds the 236 LEB rootfs volume: $rootfs_size" >&2
+rootfs_lebs=$(((rootfs_size + 126975) / 126976))
+rootfs_vol_size=$((rootfs_lebs * 126976))
+if [ "$rootfs_lebs" -gt 246 ]; then
+  echo "PassWall SquashFS exceeds the 246 LEB rootfs budget: $rootfs_size" >&2
   exit 1
 fi
 
@@ -148,7 +150,7 @@ image=$work/rootfs-passwall.squashfs
 vol_id=1
 vol_type=dynamic
 vol_name=rootfs
-vol_size=29966336
+vol_size=$rootfs_vol_size
 
 [rootfs_data]
 mode=ubi
@@ -209,6 +211,8 @@ output_sha256=$(sha256sum "$output/$firmware_name" | awk '{print $1}')
 output_size=$firmware_size
 kernel_size=$(stat -c %s "$volumes/kernel.bin")
 rootfs_size=$rootfs_size
+rootfs_lebs=$rootfs_lebs
+rootfs_volume_size=$rootfs_vol_size
 rootfs_data_ubifs_size=$overlay_size
 rootfs_data_min_lebs=$rootfs_data_lebs
 rootfs_data_autoresize=yes

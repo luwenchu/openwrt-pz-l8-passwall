@@ -15,7 +15,8 @@ PassWall。
 - 包含 PassWall 中文 LuCI 翻译。
 - LuCI 发行版名称和 SSH 登录横幅显示为 `PZL8`。
 - PassWall 默认关闭，刷机后由用户配置节点并手动启用。
-- `rootfs_data` 保持空白并自动扩容；原有配置可继续覆盖只读 rootfs。
+- rootfs 卷最多使用 246 个 LEB；`rootfs_data` 保持空白并自动扩容，预计仍有
+  约 20.7 MB 可写空间。原有配置可继续覆盖只读 rootfs。
 
 ## 固定版本
 
