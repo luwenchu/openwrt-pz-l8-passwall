@@ -51,16 +51,31 @@ PZL8 23.05-SNAPSHOT PassWall
 ----------------------------
 EOF
 
-test -f "$upper/etc/config/passwall"
-test -f "$upper/usr/share/luci/menu.d/luci-app-passwall.json" -o \
-  -f "$upper/usr/lib/lua/luci/controller/passwall.lua"
-xray_path="$(find "$upper/usr" -type f -name xray -print -quit)"
-test -n "$xray_path"
-file "$xray_path" | tee "$work/xray-file.txt"
-grep -Eq 'ELF 32-bit.*ARM' "$work/xray-file.txt"
+require_file() {
+  if [ ! -f "$1" ]; then
+    echo "Required firmware file is missing: $1" >&2
+    exit 1
+  fi
+}
 
-if grep -Eq "option enabled ['\"]?1" "$upper/etc/config/passwall"; then
-  echo "PassWall is unexpectedly enabled in its default configuration" >&2
+require_file "$upper/usr/share/passwall/0_default_config"
+require_file "$upper/etc/uci-defaults/luci-passwall"
+require_file "$upper/usr/lib/lua/luci/controller/passwall.lua"
+
+if ! grep -Eq "option enabled ['\"]0['\"]" \
+  "$upper/usr/share/passwall/0_default_config"; then
+  echo "PassWall default template is not disabled" >&2
+  exit 1
+fi
+
+xray_path="$(find "$upper/usr" -type f -name xray -print -quit)"
+if [ -z "$xray_path" ]; then
+  echo "Xray executable is missing from the overlay" >&2
+  exit 1
+fi
+file "$xray_path" | tee "$work/xray-file.txt"
+if ! grep -Eq 'ELF 32-bit.*ARM' "$work/xray-file.txt"; then
+  echo "Xray is not an ARM 32-bit executable" >&2
   exit 1
 fi
 
