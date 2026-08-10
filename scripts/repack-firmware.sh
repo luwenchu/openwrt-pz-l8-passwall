@@ -69,6 +69,19 @@ uci -q set passwall.@global[0].enabled='0'
 uci -q commit passwall
 /etc/init.d/passwall disable >/dev/null 2>&1 || true
 
+if ! grep -Fq '/usr/sbin/pzl8-postboot' /etc/rc.local; then
+  awk '
+    /^exit 0$/ && !added {
+      print "/usr/sbin/pzl8-postboot </dev/null >/tmp/pzl8-postboot.out 2>&1 &"
+      added = 1
+    }
+    { print }
+  ' /etc/rc.local >/tmp/rc.local.pzl8 &&
+    cat /tmp/rc.local.pzl8 >/etc/rc.local
+  rm -f /tmp/rc.local.pzl8
+fi
+chmod 0755 /etc/rc.local
+
 rm -f /tmp/luci-indexcache /tmp/luci-indexcache.*
 rm -rf /tmp/luci-modulecache/
 exit 0
@@ -117,6 +130,19 @@ sudo install -D -m 0755 "$work/99-pzl8-passwall-rootfs" \
 sudo install -D -m 0755 "$work/platform.sh" "$rootfs/lib/upgrade/platform.sh"
 sudo install -D -m 0644 "$repo_root/scripts/xray-legacy-compat.lua" \
   "$rootfs/usr/share/passwall/xray_legacy_compat.lua"
+sudo install -D -m 0755 "$repo_root/scripts/pzl8-postboot.sh" \
+  "$rootfs/usr/sbin/pzl8-postboot"
+if ! grep -Fq '/usr/sbin/pzl8-postboot' "$rootfs/etc/rc.local"; then
+  awk '
+    /^exit 0$/ && !added {
+      print "/usr/sbin/pzl8-postboot </dev/null >/tmp/pzl8-postboot.out 2>&1 &"
+      added = 1
+    }
+    { print }
+  ' "$rootfs/etc/rc.local" >"$work/rc.local"
+  sudo install -m 0755 "$work/rc.local" "$rootfs/etc/rc.local"
+fi
+sudo chmod 0755 "$rootfs/etc/rc.local"
 sudo python3 "$repo_root/scripts/patch-passwall-xray-legacy.py" \
   "$rootfs/usr/share/passwall/app.sh"
 sudo python3 "$repo_root/scripts/patch-passwall-nft-reject.py" \
@@ -137,6 +163,8 @@ require_file "$rootfs/lib/upgrade/platform.sh"
 require_file "$rootfs/usr/share/passwall/app.sh"
 require_file "$rootfs/usr/share/passwall/xray_legacy_compat.lua"
 require_file "$rootfs/usr/share/passwall/nftables.sh"
+require_file "$rootfs/usr/sbin/pzl8-postboot"
+require_file "$rootfs/etc/rc.local"
 
 grep -Fq "tr '\\000' '\\n' < /proc/device-tree/compatible" \
   "$rootfs/lib/upgrade/platform.sh"
@@ -145,6 +173,13 @@ grep -Fq "wireless.wifinet0.ssid='PZL8_2.4G_0'" \
   "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
 grep -Fq "wireless.wifinet1.ssid='PZL8_5G_1'" \
   "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
+grep -Fq '/usr/sbin/pzl8-postboot </dev/null' \
+  "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
+grep -Fq '/usr/sbin/pzl8-postboot </dev/null' "$rootfs/etc/rc.local"
+grep -Fq '/etc/init.d/passwall start </dev/null' \
+  "$rootfs/usr/sbin/pzl8-postboot"
+sh -n "$rootfs/usr/sbin/pzl8-postboot"
+sh -n "$rootfs/etc/rc.local"
 test "$(grep -Fc "xray_legacy_compat.lua" \
   "$rootfs/usr/share/passwall/app.sh")" -eq 1
 grep -Fq "if \$XRAY_BIN version 2>/dev/null | head -n1 | grep -q '^Xray 1\\.'; then" \
@@ -262,6 +297,10 @@ unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   usr/share/passwall/xray_legacy_compat.lua > "$work/verify-xray-legacy-compat.lua"
 unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   usr/share/passwall/nftables.sh > "$work/verify-passwall-nftables.sh"
+unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  usr/sbin/pzl8-postboot > "$work/verify-pzl8-postboot.sh"
+unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  etc/rc.local > "$work/verify-rc.local"
 test "$(grep -Fc "xray_legacy_compat.lua" \
   "$work/verify-passwall-app.sh")" -eq 1
 sh -n "$work/verify-passwall-app.sh"
@@ -273,6 +312,12 @@ if grep -Fq "counter reject" "$work/verify-passwall-nftables.sh"; then
 fi
 grep -Fq "counter drop" "$work/verify-passwall-nftables.sh"
 sh -n "$work/verify-passwall-nftables.sh"
+cmp "$repo_root/scripts/pzl8-postboot.sh" "$work/verify-pzl8-postboot.sh"
+grep -Fq '/etc/init.d/passwall start </dev/null' \
+  "$work/verify-pzl8-postboot.sh"
+grep -Fq '/usr/sbin/pzl8-postboot </dev/null' "$work/verify-rc.local"
+sh -n "$work/verify-pzl8-postboot.sh"
+sh -n "$work/verify-rc.local"
 
 if unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   usr/bin/mosdns >/dev/null 2>&1; then
@@ -313,6 +358,8 @@ passwall_mode=nftables
 passwall_core=xray
 passwall_xray_1x_compat=yes
 passwall_nft_block_action=drop
+passwall_stdin_deadlock_fix=yes
+postboot_ssid_repair=yes
 passwall_default_enabled=no
 display_name=PZL8
 sysupgrade_board_parser=fixed

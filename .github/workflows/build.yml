@@ -74,6 +74,8 @@ jobs:
           Base kernel, DTB, QSDK WiFi and NSS stack are preserved.
           PassWall and Xray are embedded in the repacked SquashFS and disabled by default.
           Xray 1.8.24 compatibility conversion and Linux 5.4 nftables blocking fixes are included.
+          PassWall postboot startup closes stdin to prevent nftables pipe deadlocks.
+          PZL8 SSIDs are restored after late QSDK wireless initialization.
           MosDNS and its dedicated v2dat helper are removed to provide rootfs capacity.
           The CMCC PZL8 sysupgrade board parser is fixed.
           Physical boot and throughput still require router testing."

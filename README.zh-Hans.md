@@ -16,9 +16,12 @@ PassWall。
   `raw` 传输以及扁平 VLESS、Shadowsocks 出站配置转换为旧核心可识别的格式。
 - 将 PassWall nftables 阻断规则的 `reject` 降级为 `drop`，兼容基底固件的
   Linux 5.4 nftables；这也用于阻断 UDP 443，避免 QUIC 绕过仅 TCP 的代理。
+- PassWall 开机兜底启动显式关闭标准输入，避免其 nftables 管道中的 `cat`
+  等待 EOF，导致启动流程停在“开始加载 nftables 防火墙规则”。
 - 包含 PassWall 中文 LuCI 翻译。
 - LuCI 发行版名称和 SSH 登录横幅显示为 `PZL8`。
 - 首次启动时默认无线名称为 `PZL8_2.4G_0` 和 `PZL8_5G_1`。
+- 开机 90 秒后再次检查 SSID，修复 QSDK 后期初始化把名称覆盖回 `Nwrt` 的情况。
 - PassWall 默认关闭，刷机后由用户配置节点并手动启用。
 - rootfs 卷最多使用 246 个 LEB；`rootfs_data` 保持空白并自动扩容，预计仍有
   约 20.7 MB 可写空间。原有配置可继续覆盖只读 rootfs。
@@ -55,5 +58,6 @@ CI 成功仅证明软件包构建、固件尺寸和静态结构校验通过。�
 NSS 状态、有线/无线千兆性能仍需在 PZ-L8 上刷机验证。首次测试应保留 TTL 和
 initramfs 救援条件，不要擦除 ART、bootconfig 或其他校准分区。
 
-当前实体机已验证 VLESS/Reality 和 Shadowsocks 的 TCP 透明代理。UDP 节点未
-配置，其他协议、链式代理、负载均衡及分流节点仍需单独验证。
+当前实体机已验证 VLESS/Reality 和 Shadowsocks 的 TCP 透明代理，并验证一次
+受控重启后的 PassWall 自动启动、nftables 规则、DNS、HTTPS 和 PZL8 SSID。
+UDP 节点未配置，其他协议、链式代理、负载均衡及分流节点仍需单独验证。
