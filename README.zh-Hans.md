@@ -13,7 +13,7 @@ PassWall。
 - PassWall 只启用 nftables 透明代理。
 - 只预置 Xray 核心，不加入 Sing-Box、SSR、Hysteria、NaiveProxy 等额外核心。
 - 为内置 Xray 1.8.24 加入兼容层：启动时仅对 Xray 1.x 将新版 PassWall 生成的
-  `raw` 传输和扁平 VLESS 出站配置转换为旧核心可识别的格式。
+  `raw` 传输以及扁平 VLESS、Shadowsocks 出站配置转换为旧核心可识别的格式。
 - 将 PassWall nftables 阻断规则的 `reject` 降级为 `drop`，兼容基底固件的
   Linux 5.4 nftables；这也用于阻断 UDP 443，避免 QUIC 绕过仅 TCP 的代理。
 - 包含 PassWall 中文 LuCI 翻译。
@@ -55,5 +55,5 @@ CI 成功仅证明软件包构建、固件尺寸和静态结构校验通过。�
 NSS 状态、有线/无线千兆性能仍需在 PZ-L8 上刷机验证。首次测试应保留 TTL 和
 initramfs 救援条件，不要擦除 ART、bootconfig 或其他校准分区。
 
-当前实体机仅验证了 VLESS/Reality 的 TCP 透明代理。UDP 节点未配置，其他协议、
-链式代理、负载均衡及分流节点仍需单独验证。
+当前实体机已验证 VLESS/Reality 和 Shadowsocks 的 TCP 透明代理。UDP 节点未
+配置，其他协议、链式代理、负载均衡及分流节点仍需单独验证。

@@ -55,6 +55,25 @@ for _, outbound in ipairs(config.outbounds or {}) do
 			changed = true
 		end
 	end
+
+	if outbound.protocol == "shadowsocks" and node.protocol == "shadowsocks" then
+		local settings = outbound.settings or {}
+		local servers = settings.servers
+		if settings.address or type(servers) ~= "table" or #servers == 0 then
+			outbound.settings = {
+				servers = {
+					{
+						address = settings.address or node.address,
+						port = tonumber(settings.port or node.port),
+						method = settings.method or node.method,
+						password = settings.password or node.password,
+						level = settings.level or 0
+					}
+				}
+			}
+			changed = true
+		end
+	end
 end
 
 if changed then
