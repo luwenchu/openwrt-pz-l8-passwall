@@ -9,7 +9,7 @@ on:
       - README.zh-Hans.md
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -62,10 +62,25 @@ jobs:
           chmod +x scripts/*.sh
           scripts/repack-firmware.sh
 
-      - name: Upload verified firmware
-        uses: actions/upload-artifact@v4
-        with:
-          name: pzl8-passwall-${{ github.sha }}
-          path: output/
-          if-no-files-found: error
-          retention-days: 30
+      - name: Publish verified firmware prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          tag="pzl8-passwall-${short_sha}"
+          title="PZL8 PassWall ${short_sha}"
+          notes="Automated test firmware built from ${GITHUB_SHA}.
+
+          Base kernel, rootfs, QSDK WiFi and NSS stack are preserved.
+          PassWall uses nftables with Xray and is disabled by default.
+          Physical boot and throughput still require router testing."
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" output/* --clobber
+          else
+            gh release create "$tag" output/* \
+              --target "$GITHUB_SHA" \
+              --title "$title" \
+              --notes "$notes" \
+              --prerelease
+          fi
