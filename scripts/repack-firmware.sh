@@ -137,7 +137,7 @@ python3 "$repo_root/scripts/extract_ubi.py" \
 cmp "$volumes/kernel.bin" "$work/verify-volumes/kernel.bin"
 cmp "$volumes/rootfs.squashfs" "$work/verify-volumes/rootfs.squashfs"
 
-cp "$work/passwall-packages.txt" "$output/passwall-packages.txt"
+cp "$ubi_root/passwall-packages.txt" "$output/passwall-packages.txt"
 (
   cd "$output"
   sha256sum "$firmware_name" > sha256sums
