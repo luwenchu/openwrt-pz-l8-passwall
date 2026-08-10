@@ -27,6 +27,9 @@ PassWall。
   约 20.7 MB 可写空间。原有配置可继续覆盖只读 rootfs。
 - 修复 QSDK `platform.sh` 对 NUL 分隔设备树兼容列表的解析，确保
   `cmcc,pzl8` 能进入 NAND sysupgrade 流程。
+- 修复 Web 不保留配置升级后仍启动旧固件：升级时读取 bootconfig 的
+  `upgradepartition`，只写入非活动的 `rootfs`/`rootfs_1` 槽，校验 UBI 中的
+  kernel 和 rootfs 卷后再同步更新 `BOOTCONFIG`、`BOOTCONFIG1`。
 
 ## 固定版本
 

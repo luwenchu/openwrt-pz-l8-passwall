@@ -86,48 +86,12 @@ rm -f /tmp/luci-indexcache /tmp/luci-indexcache.*
 rm -rf /tmp/luci-modulecache/
 exit 0
 EOF
-cat > "$work/platform.sh" <<'EOF'
-#!/bin/sh
-. /lib/functions/system.sh
-
-platform_check_image() {
-	return 0
-}
-
-platform_do_upgrade() {
-	local board part
-
-	board="$(
-		tr '\000' '\n' < /proc/device-tree/compatible |
-			grep -m1 -E '^(cmcc,pzl8|cmcc,rax3000qy|redmi,ax3000-m79|redmi,ax3000-m81|cucc,vs010|rg,ma3063|axfh3)$'
-	)"
-
-	case "$board" in
-		cmcc,pzl8|\
-		cmcc,rax3000qy|\
-		redmi,ax3000-m79|\
-		redmi,ax3000-m81|\
-		cucc,vs010|\
-		rg,ma3063|\
-		axfh3)
-			part="$(sed -n 's/.*ubi.mtd=\([^ ]*\).*/\1/p' /proc/cmdline)"
-			[ -n "$part" ] || part=rootfs
-			CI_UBIPART="$part"
-			CI_KERNPART="kernel"
-			nand_do_upgrade "$1"
-			;;
-		*)
-			echo "Sysupgrade is not supported on your board($board) yet."
-			return 1
-			;;
-	esac
-}
-EOF
 sudo install -D -m 0644 "$work/openwrt_release" "$rootfs/etc/openwrt_release"
 sudo install -D -m 0644 "$work/banner" "$rootfs/etc/banner"
 sudo install -D -m 0755 "$work/99-pzl8-passwall-rootfs" \
   "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
-sudo install -D -m 0755 "$work/platform.sh" "$rootfs/lib/upgrade/platform.sh"
+sudo install -D -m 0755 "$repo_root/scripts/pzl8-platform.sh" \
+  "$rootfs/lib/upgrade/platform.sh"
 sudo install -D -m 0644 "$repo_root/scripts/xray-legacy-compat.lua" \
   "$rootfs/usr/share/passwall/xray_legacy_compat.lua"
 sudo install -D -m 0755 "$repo_root/scripts/pzl8-postboot.sh" \
@@ -169,6 +133,16 @@ require_file "$rootfs/etc/rc.local"
 grep -Fq "tr '\\000' '\\n' < /proc/device-tree/compatible" \
   "$rootfs/lib/upgrade/platform.sh"
 grep -Fq "cmcc,pzl8" "$rootfs/lib/upgrade/platform.sh"
+grep -Fq 'target="$(pzl8_upgrade_target)"' "$rootfs/lib/upgrade/platform.sh"
+grep -Fq 'CI_UBIPART="$target"' "$rootfs/lib/upgrade/platform.sh"
+grep -Fq 'pzl8_commit_boot_slot' "$rootfs/lib/upgrade/platform.sh"
+grep -Fq '0:BOOTCONFIG1' "$rootfs/lib/upgrade/platform.sh"
+grep -Fq '0:BOOTCONFIG' "$rootfs/lib/upgrade/platform.sh"
+if grep -Fq 'nand_do_upgrade "$1"' "$rootfs/lib/upgrade/platform.sh"; then
+  echo "Unsafe active-slot nand_do_upgrade call remains in platform.sh" >&2
+  exit 1
+fi
+sh -n "$rootfs/lib/upgrade/platform.sh"
 grep -Fq "wireless.wifinet0.ssid='PZL8_2.4G_0'" \
   "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
 grep -Fq "wireless.wifinet1.ssid='PZL8_5G_1'" \
@@ -301,6 +275,8 @@ unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   usr/sbin/pzl8-postboot > "$work/verify-pzl8-postboot.sh"
 unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   etc/rc.local > "$work/verify-rc.local"
+unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  lib/upgrade/platform.sh > "$work/verify-platform.sh"
 test "$(grep -Fc "xray_legacy_compat.lua" \
   "$work/verify-passwall-app.sh")" -eq 1
 sh -n "$work/verify-passwall-app.sh"
@@ -318,6 +294,15 @@ grep -Fq '/etc/init.d/passwall start </dev/null' \
 grep -Fq '/usr/sbin/pzl8-postboot </dev/null' "$work/verify-rc.local"
 sh -n "$work/verify-pzl8-postboot.sh"
 sh -n "$work/verify-rc.local"
+cmp "$repo_root/scripts/pzl8-platform.sh" "$work/verify-platform.sh"
+grep -Fq 'target="$(pzl8_upgrade_target)"' "$work/verify-platform.sh"
+grep -Fq 'CI_UBIPART="$target"' "$work/verify-platform.sh"
+grep -Fq 'pzl8_commit_boot_slot' "$work/verify-platform.sh"
+if grep -Fq 'nand_do_upgrade "$1"' "$work/verify-platform.sh"; then
+  echo "Repacked platform.sh still writes the active rootfs slot" >&2
+  exit 1
+fi
+sh -n "$work/verify-platform.sh"
 
 if unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   usr/bin/mosdns >/dev/null 2>&1; then
@@ -363,5 +348,6 @@ postboot_ssid_repair=yes
 passwall_default_enabled=no
 display_name=PZL8
 sysupgrade_board_parser=fixed
+sysupgrade_dual_slot=fixed
 xray_file=$(cat "$work/xray-file.txt")
 EOF

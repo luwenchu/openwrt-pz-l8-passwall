@@ -77,7 +77,7 @@ jobs:
           PassWall postboot startup closes stdin to prevent nftables pipe deadlocks.
           PZL8 SSIDs are restored after late QSDK wireless initialization.
           MosDNS and its dedicated v2dat helper are removed to provide rootfs capacity.
-          The CMCC PZL8 sysupgrade board parser is fixed.
+          CMCC PZL8 Web sysupgrade writes the inactive rootfs slot and persists the bootconfig switch.
           Physical boot and throughput still require router testing."
 
           if gh release view "$tag" >/dev/null 2>&1; then
