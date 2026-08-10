@@ -11,10 +11,11 @@ rootfs="$work/rootfs"
 ubi_root="$work/rootfs-data"
 upper="$ubi_root/upper"
 output="$repo_root/output"
-sdk="$work/sdk"
+package_cache="$work/package-cache"
 firmware_name="PZL8-2025-01-03-passwall-nft-xray-factory.bin"
 
 echo "$BASE_SHA256  $base" | sha256sum -c -
+test -d "$package_cache"
 rm -rf "$volumes" "$rootfs" "$ubi_root" "$output"
 mkdir -p "$volumes" "$upper" "$ubi_root/work" "$output"
 
@@ -24,7 +25,7 @@ test "$(stat -c %s "$volumes/rootfs.squashfs")" -eq 29874708
 
 sudo unsquashfs -d "$rootfs" "$volumes/rootfs.squashfs" >/dev/null
 python3 "$repo_root/scripts/install_ipks.py" \
-  --ipk-root "$sdk/bin/packages" \
+  --ipk-root "$package_cache" \
   --base-status "$rootfs/usr/lib/opkg/status" \
   --root "$upper" \
   luci-app-passwall luci-i18n-passwall-zh-cn xray-core

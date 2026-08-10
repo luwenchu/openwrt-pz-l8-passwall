@@ -37,10 +37,30 @@ jobs:
           restore-keys: |
             pzl8-passwall-
 
-      - name: Build packages and firmware
+      - name: Restore compiled packages
+        id: package-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: work/package-cache
+          key: pzl8-packages-${{ hashFiles('pins.env', 'scripts/build-passwall.sh') }}
+
+      - name: Build PassWall packages
+        if: steps.package-cache.outputs.cache-hit != 'true'
         run: |
           chmod +x scripts/*.sh
-          scripts/build.sh
+          scripts/build-passwall.sh
+
+      - name: Save compiled packages
+        if: steps.package-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: work/package-cache
+          key: ${{ steps.package-cache.outputs.cache-primary-key }}
+
+      - name: Repack and verify firmware
+        run: |
+          chmod +x scripts/*.sh
+          scripts/repack-firmware.sh
 
       - name: Upload verified firmware
         uses: actions/upload-artifact@v4

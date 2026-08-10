@@ -79,3 +79,7 @@ if find bin/packages -name '*.ko' -print -quit | grep -q .; then
   echo "Kernel modules were unexpectedly produced; refusing mixed-kernel output" >&2
   exit 1
 fi
+
+rm -rf "$work/package-cache"
+mkdir -p "$work/package-cache"
+cp -a bin/packages/. "$work/package-cache/"

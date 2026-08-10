@@ -9,10 +9,7 @@ import tarfile
 import tempfile
 
 
-def read_ar(path):
-    data = path.read_bytes()
-    if not data.startswith(b"!<arch>\n"):
-        raise ValueError(f"{path} is not an ar archive")
+def read_ar(data):
     offset = 8
     members = {}
     while offset + 60 <= len(data):
@@ -22,6 +19,30 @@ def read_ar(path):
         start = offset + 60
         members[name] = data[start:start + size]
         offset = start + size + (size % 2)
+    return members
+
+
+def read_ipk(path):
+    data = path.read_bytes()
+    if data.startswith(b"!<arch>\n"):
+        return read_ar(data)
+
+    members = {}
+    try:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as archive:
+            for item in archive.getmembers():
+                if not item.isfile():
+                    continue
+                name = pathlib.PurePosixPath(item.name).name
+                if name.startswith(("control.tar", "data.tar", "debian-binary")):
+                    members[name] = archive.extractfile(item).read()
+    except tarfile.TarError as error:
+        raise ValueError(f"{path} is not a supported IPK archive") from error
+
+    if not any(name.startswith("control.tar") for name in members):
+        raise ValueError(f"{path} has no control archive")
+    if not any(name.startswith("data.tar") for name in members):
+        raise ValueError(f"{path} has no data archive")
     return members
 
 
@@ -60,7 +81,7 @@ def parse_control(text):
 
 
 def control_from_ipk(path):
-    members = read_ar(path)
+    members = read_ipk(path)
     control_name = next(name for name in members if name.startswith("control.tar"))
     blob = members[control_name]
     if control_name.endswith(".zst"):
@@ -115,7 +136,11 @@ def main():
     raw_controls = {}
     providers = {}
     for path in args.ipk_root.rglob("*.ipk"):
-        fields, raw = control_from_ipk(path)
+        try:
+            fields, raw = control_from_ipk(path)
+        except (KeyError, StopIteration, ValueError, tarfile.TarError) as error:
+            print(f"skip unreadable package\t{path.name}\t{error}")
+            continue
         name = fields.get("Package")
         if not name:
             continue
@@ -158,7 +183,7 @@ def main():
     with status_path.open("a", encoding="utf-8") as status:
         for name in selected:
             path = package_files[name]
-            members = read_ar(path)
+            members = read_ipk(path)
             data_name = next(item for item in members if item.startswith("data.tar"))
             files = extract_tar(members[data_name], data_name, args.root)
             control = raw_controls[name].rstrip()
