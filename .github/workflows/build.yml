@@ -71,8 +71,9 @@ jobs:
           title="PZL8 PassWall ${short_sha}"
           notes="Automated test firmware built from ${GITHUB_SHA}.
 
-          Base kernel, rootfs, QSDK WiFi and NSS stack are preserved.
-          PassWall uses nftables with Xray and is disabled by default.
+          Base kernel, DTB, QSDK WiFi and NSS stack are preserved.
+          PassWall and Xray are embedded in the repacked SquashFS and disabled by default.
+          MosDNS is removed to provide rootfs capacity.
           Physical boot and throughput still require router testing."
 
           if gh release view "$tag" >/dev/null 2>&1; then

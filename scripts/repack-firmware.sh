@@ -85,6 +85,11 @@ require_file "$rootfs/etc/uci-defaults/luci-passwall"
 require_file "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
 require_file "$rootfs/usr/lib/lua/luci/controller/passwall.lua"
 
+if [ -e "$rootfs/usr/bin/mosdns" ]; then
+  echo "MosDNS executable was not removed before SquashFS packing" >&2
+  exit 1
+fi
+
 if ! grep -Eq "option enabled ['\"]0['\"]" \
   "$rootfs/usr/share/passwall/0_default_config"; then
   echo "PassWall default template is not disabled" >&2
@@ -103,7 +108,7 @@ if ! grep -Eq 'ELF 32-bit.*ARM' "$work/xray-file.txt"; then
 fi
 
 sudo mksquashfs "$rootfs" "$work/rootfs-passwall.squashfs" \
-  -comp xz -b 256K -no-xattrs -noappend >/dev/null
+  -comp xz -Xbcj arm -b 256K -no-xattrs -noappend >/dev/null
 rootfs_size="$(stat -c %s "$work/rootfs-passwall.squashfs")"
 if [ "$rootfs_size" -gt 29966336 ]; then
   echo "PassWall SquashFS exceeds the 236 LEB rootfs volume: $rootfs_size" >&2
