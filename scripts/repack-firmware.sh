@@ -30,6 +30,7 @@ sudo python3 "$repo_root/scripts/install_ipks.py" \
   --remove-package mosdns \
   --remove-package luci-app-mosdns \
   --remove-package luci-i18n-mosdns-zh-cn \
+  --remove-package v2dat \
   luci-app-passwall luci-i18n-passwall-zh-cn xray-core
 
 cat > "$work/openwrt_release" <<'EOF'
@@ -85,8 +86,8 @@ require_file "$rootfs/etc/uci-defaults/luci-passwall"
 require_file "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
 require_file "$rootfs/usr/lib/lua/luci/controller/passwall.lua"
 
-if [ -e "$rootfs/usr/bin/mosdns" ]; then
-  echo "MosDNS executable was not removed before SquashFS packing" >&2
+if [ -e "$rootfs/usr/bin/mosdns" ] || [ -e "$rootfs/usr/bin/v2dat" ]; then
+  echo "MosDNS executables were not removed before SquashFS packing" >&2
   exit 1
 fi
 
@@ -188,6 +189,11 @@ if unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   echo "MosDNS was not removed from the repacked rootfs" >&2
   exit 1
 fi
+if unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  usr/bin/v2dat >/dev/null 2>&1; then
+  echo "MosDNS v2dat helper was not removed from the repacked rootfs" >&2
+  exit 1
+fi
 
 cp "$work/passwall-packages.txt" "$output/passwall-packages.txt"
 (
@@ -210,7 +216,7 @@ architecture=arm_cortex-a7_neon-vfpv4
 kernel_preserved=yes
 rootfs_repacked=yes
 passwall_location=squashfs
-removed_packages=mosdns,luci-app-mosdns,luci-i18n-mosdns-zh-cn
+removed_packages=mosdns,luci-app-mosdns,luci-i18n-mosdns-zh-cn,v2dat
 passwall_mode=nftables
 passwall_core=xray
 passwall_default_enabled=no

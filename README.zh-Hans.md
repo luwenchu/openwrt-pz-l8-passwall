@@ -8,7 +8,8 @@ PassWall。
 
 - 保留原固件 kernel、DTB 和硬件驱动，不混入其他内核模块。
 - 将 PassWall/Xray 写入只读 SquashFS，保留配置刷机也不会覆盖插件。
-- 移除 MosDNS 及其 LuCI 文件，为 PassWall/Xray 腾出 SquashFS 空间。
+- 移除 MosDNS、其 LuCI 文件及专用 `v2dat` 工具，为 PassWall/Xray 腾出
+  SquashFS 空间；保留 Xray 使用的 GeoIP/GeoSite 数据。
 - PassWall 只启用 nftables 透明代理。
 - 只预置 Xray 核心，不加入 Sing-Box、SSR、Hysteria、NaiveProxy 等额外核心。
 - 包含 PassWall 中文 LuCI 翻译。
