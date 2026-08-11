@@ -49,7 +49,9 @@ FIT 根描述使用官方 U-Boot Web 识别的 `Flashing nand 800 20000`，其�
 使用 U-Boot 支持的 gzip 载荷，在 RAM 地址 `0x48000000` 解压后再写入两个
 rootfs 槽。为保留足够的上传余量，测试固件移除了不影响中文、Argon、
 PassWall/Xray、QSDK 无线或 NSS 的 IPv6 DHCP Relay、Quagga、ZeroTier 和
-ttyd Web 终端。
+ttyd Web 终端及 ksmbd。由于这版 U-Boot 的单次 gzip `imxtract` 解压上限为
+8 MiB，recovery 会把 UBI 分为多个不超过 7 MiB 的节点，依次解压到连续 RAM
+后再整体写入。
 
 通过 TFTP 加载后可执行：
 

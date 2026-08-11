@@ -45,6 +45,9 @@ sudo python3 "$repo_root/scripts/install_ipks.py" \
   --remove-package luci-app-ttyd \
   --remove-package luci-i18n-ttyd-zh-cn \
   --remove-package ttyd \
+  --remove-package luci-app-ksmbd \
+  --remove-package luci-i18n-ksmbd-zh-cn \
+  --remove-package ksmbd-server \
   luci-app-passwall luci-i18n-passwall-zh-cn xray-core
 
 cat > "$work/openwrt_release" <<'EOF'
@@ -271,23 +274,89 @@ if [ "$firmware_size" -gt $((58 * 1024 * 1024)) ]; then
 fi
 
 firmware_size_hex="$(printf '0x%08x' "$firmware_size")"
-gzip -9 -n -c "$output/$firmware_name" > "$work/pzl8-uboot-firmware.bin.gz"
-gzip -t "$work/pzl8-uboot-firmware.bin.gz"
-recovery_payload_size="$(stat -c %s "$work/pzl8-uboot-firmware.bin.gz")"
+recovery_chunk_size=$((7 * 1024 * 1024))
+recovery_chunk_dir="$work/pzl8-uboot-recovery-chunks"
+rm -rf "$recovery_chunk_dir"
+mkdir -p "$recovery_chunk_dir"
+split -b "$recovery_chunk_size" -d -a 2 \
+  "$output/$firmware_name" "$recovery_chunk_dir/firmware-"
+
+recovery_extract_commands="$work/pzl8-uboot-extract-commands"
+recovery_its_nodes="$work/pzl8-uboot-firmware-nodes.its"
+: > "$recovery_extract_commands"
+: > "$recovery_its_nodes"
+recovery_chunk_count=0
+recovery_payload_size=0
+recovery_offset=0
+
+for recovery_chunk in "$recovery_chunk_dir"/firmware-[0-9][0-9]; do
+  recovery_suffix="${recovery_chunk##*-}"
+  recovery_node="firmware-$recovery_suffix"
+  recovery_chunk_gzip="$recovery_chunk.gz"
+  recovery_chunk_uncompressed_size="$(stat -c %s "$recovery_chunk")"
+  if [ "$recovery_chunk_uncompressed_size" -gt $((8 * 1024 * 1024)) ]; then
+    echo "U-Boot recovery chunk exceeds the 8 MiB imxtract limit" >&2
+    exit 1
+  fi
+
+  gzip -9 -n -c "$recovery_chunk" > "$recovery_chunk_gzip"
+  gzip -t "$recovery_chunk_gzip"
+  recovery_chunk_payload_size="$(stat -c %s "$recovery_chunk_gzip")"
+  recovery_chunk_crc32="$(python3 -c \
+    'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
+    "$recovery_chunk_gzip")"
+  recovery_chunk_address="$(printf '0x%08x' $((0x48000000 + recovery_offset)))"
+
+  cat >> "$recovery_extract_commands" <<EOF
+echo "Extracting PZL8 UBI chunk $recovery_suffix"
+imxtract "\$fitaddr" "$recovery_node" "$recovery_chunk_address" || exit 1
+EOF
+
+  cat >> "$recovery_its_nodes" <<EOF
+    $recovery_node {
+      description = "PZL8 PassWall UBI chunk $recovery_suffix";
+      data = /incbin/("$recovery_chunk_gzip");
+      type = "firmware";
+      arch = "arm";
+      compression = "gzip";
+      hash@1 {
+        value = <0x$recovery_chunk_crc32>;
+        algo = "crc32";
+      };
+    };
+EOF
+
+  recovery_chunk_count=$((recovery_chunk_count + 1))
+  recovery_payload_size=$((recovery_payload_size + recovery_chunk_payload_size))
+  recovery_offset=$((recovery_offset + recovery_chunk_uncompressed_size))
+done
+
+test "$recovery_chunk_count" -gt 1
+test "$recovery_offset" -eq "$firmware_size"
+
 sed "s/@FIRMWARE_SIZE_HEX@/$firmware_size_hex/g" \
   "$repo_root/scripts/pzl8-uboot-recovery.scr.in" \
+  > "$work/pzl8-uboot-recovery.scr.template"
+awk -v commands="$recovery_extract_commands" '
+  $0 == "@FIRMWARE_EXTRACT_COMMANDS@" {
+    while ((getline line < commands) > 0)
+      print line
+    close(commands)
+    next
+  }
+  { print }
+' "$work/pzl8-uboot-recovery.scr.template" \
   > "$work/pzl8-uboot-recovery.scr"
 
 fit_timestamp="${SOURCE_DATE_EPOCH:-$(git -C "$repo_root" log -1 --format=%ct)}"
 script_crc32="$(python3 -c \
   'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
   "$work/pzl8-uboot-recovery.scr")"
-firmware_crc32="$(python3 -c \
-  'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
-  "$work/pzl8-uboot-firmware.bin.gz")"
 
 test "$(grep -c '^nand erase ' "$work/pzl8-uboot-recovery.scr")" -eq 2
 test "$(grep -c '^nand write ' "$work/pzl8-uboot-recovery.scr")" -eq 2
+test "$(grep -c '^imxtract ' "$work/pzl8-uboot-recovery.scr")" \
+  -eq "$recovery_chunk_count"
 grep -Fq "nand erase 0x00900000 0x03a00000" \
   "$work/pzl8-uboot-recovery.scr"
 grep -Fq "nand erase 0x04300000 0x03a00000" \
@@ -298,7 +367,7 @@ grep -Fq "nand write \"\$fileaddr\" 0x04300000 $firmware_size_hex" \
   "$work/pzl8-uboot-recovery.scr"
 grep -Fq 'setenv recovery_addr 0x48000000' \
   "$work/pzl8-uboot-recovery.scr"
-grep -Fq 'imxtract "$fitaddr" firmware "$recovery_addr"' \
+grep -Fq 'imxtract "$fitaddr" "firmware-00" "0x48000000"' \
   "$work/pzl8-uboot-recovery.scr"
 if grep -Eq \
   'SBL1|MIBIB|BOOTCONFIG|QSEE|DEVCFG|CDT|APPSBL|ART|saveenv' \
@@ -327,17 +396,9 @@ cat > "$work/pzl8-uboot-recovery.its" <<EOF
       };
     };
 
-    firmware {
-      description = "PZL8 PassWall UBI firmware";
-      data = /incbin/("$work/pzl8-uboot-firmware.bin.gz");
-      type = "firmware";
-      arch = "arm";
-      compression = "gzip";
-      hash@1 {
-        value = <0x$firmware_crc32>;
-        algo = "crc32";
-      };
-    };
+EOF
+cat "$recovery_its_nodes" >> "$work/pzl8-uboot-recovery.its"
+cat >> "$work/pzl8-uboot-recovery.its" <<EOF
   };
 };
 EOF
@@ -354,27 +415,31 @@ test "$(fdtget "$output/$uboot_recovery_name" /images/script description)" = \
   "flash.scr"
 test "$(fdtget "$output/$uboot_recovery_name" /images/script type)" = \
   "script"
-test "$(fdtget "$output/$uboot_recovery_name" /images/firmware description)" = \
-  "PZL8 PassWall UBI firmware"
-test "$(fdtget "$output/$uboot_recovery_name" /images/firmware type)" = \
-  "firmware"
-test "$(fdtget "$output/$uboot_recovery_name" /images/firmware compression)" = \
-  "gzip"
 test "$(fdtget "$output/$uboot_recovery_name" /images/script/hash@1 algo)" = \
   "crc32"
-test "$(fdtget "$output/$uboot_recovery_name" /images/firmware/hash@1 algo)" = \
-  "crc32"
+for recovery_chunk in "$recovery_chunk_dir"/firmware-[0-9][0-9]; do
+  recovery_suffix="${recovery_chunk##*-}"
+  recovery_node="firmware-$recovery_suffix"
+  test "$(fdtget "$output/$uboot_recovery_name" \
+    "/images/$recovery_node" type)" = "firmware"
+  test "$(fdtget "$output/$uboot_recovery_name" \
+    "/images/$recovery_node" compression)" = "gzip"
+  test "$(fdtget "$output/$uboot_recovery_name" \
+    "/images/$recovery_node/hash@1" algo)" = "crc32"
+done
 
 rm -rf "$work/verify-uboot-recovery"
 python3 "$repo_root/scripts/extract_fit.py" \
   "$output/$uboot_recovery_name" \
   "$work/verify-uboot-recovery" |
   tee "$work/verify-uboot-recovery.txt"
-test "$(find "$work/verify-uboot-recovery" -maxdepth 1 -type f | wc -l)" -eq 2
+test "$(find "$work/verify-uboot-recovery" -maxdepth 1 -type f | wc -l)" \
+  -eq $((recovery_chunk_count + 1))
 cmp "$work/pzl8-uboot-recovery.scr" \
   "$work/verify-uboot-recovery/script.bin"
-cmp "$output/$firmware_name" \
-  "$work/verify-uboot-recovery/firmware.bin"
+cat "$work/verify-uboot-recovery"/firmware-*.bin \
+  > "$work/verify-uboot-recovery/firmware.bin"
+cmp "$output/$firmware_name" "$work/verify-uboot-recovery/firmware.bin"
 uboot_recovery_size="$(stat -c %s "$output/$uboot_recovery_name")"
 if [ "$uboot_recovery_size" -ge $((32 * 1024 * 1024)) ]; then
   echo "U-Boot Web recovery image exceeds the 32 MiB HTTP limit" >&2
@@ -383,9 +448,6 @@ fi
 test "$script_crc32" = "$(python3 -c \
   'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
   "$work/verify-uboot-recovery/script.bin")"
-test "$firmware_crc32" = "$(python3 -c \
-  'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
-  "$work/pzl8-uboot-firmware.bin.gz")"
 
 python3 "$repo_root/scripts/extract_ubi.py" \
   "$output/$firmware_name" "$work/verify-volumes"
@@ -454,6 +516,7 @@ for removed_path in \
   usr/sbin/dhcrelay \
   usr/bin/zerotier-one \
   usr/bin/ttyd \
+  usr/libexec/ksmbd.tools \
   usr/bin/vtysh \
   usr/sbin/zebra; do
   if unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
@@ -485,6 +548,8 @@ uboot_recovery_compression=gzip
 uboot_recovery_payload_size=$recovery_payload_size
 uboot_recovery_uncompressed_size=$firmware_size
 uboot_recovery_decompress_address=0x48000000
+uboot_recovery_chunk_size=$recovery_chunk_size
+uboot_recovery_chunk_count=$recovery_chunk_count
 uboot_recovery_http_limit=0x02000000
 uboot_recovery_flash_geometry=nand-0x800-0x20000
 uboot_recovery_layout=dual-rootfs-only
@@ -503,7 +568,7 @@ architecture=arm_cortex-a7_neon-vfpv4
 kernel_preserved=yes
 rootfs_repacked=yes
 passwall_location=squashfs
-removed_packages=mosdns,luci-app-mosdns,luci-i18n-mosdns-zh-cn,v2dat,isc-dhcp-relay-ipv6,quagga-watchquagga,quagga-vtysh,quagga-ripd,quagga-zebra,quagga-libzebra,quagga,luci-app-zerotier,luci-i18n-zerotier-zh-cn,zerotier,luci-app-ttyd,luci-i18n-ttyd-zh-cn,ttyd
+removed_packages=mosdns,luci-app-mosdns,luci-i18n-mosdns-zh-cn,v2dat,isc-dhcp-relay-ipv6,quagga-watchquagga,quagga-vtysh,quagga-ripd,quagga-zebra,quagga-libzebra,quagga,luci-app-zerotier,luci-i18n-zerotier-zh-cn,zerotier,luci-app-ttyd,luci-i18n-ttyd-zh-cn,ttyd,luci-app-ksmbd,luci-i18n-ksmbd-zh-cn,ksmbd-server
 passwall_mode=nftables
 passwall_core=xray
 passwall_xray_1x_compat=yes

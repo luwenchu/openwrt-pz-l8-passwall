@@ -22,9 +22,8 @@ else
 	setenv fitaddr "$fileaddr"
 fi
 
-echo "Extracting PZL8 UBI firmware"
 setenv recovery_addr 0x48000000
-imxtract "$fitaddr" firmware "$recovery_addr" || exit 1
+@FIRMWARE_EXTRACT_COMMANDS@
 setenv fileaddr "$recovery_addr"
 
 echo "Writing rootfs slot 0 at 0x00900000"
