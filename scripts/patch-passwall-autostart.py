@@ -16,6 +16,8 @@ PATCH = (
     '\t\t\tsys.call("/etc/init.d/passwall enable >/dev/null 2>&1")\n'
     '\t\t\tif not init_enabled then\n'
     '\t\t\t\tsys.call("(/etc/init.d/passwall start </dev/null >/tmp/passwall-first-enable.out 2>&1) &")\n'
+    '\t\t\telse\n'
+    '\t\t\t\tsys.call("(/etc/init.d/passwall restart </dev/null >/tmp/passwall-apply-reload.out 2>&1) &")\n'
     '\t\t\tend\n'
     '\t\telse\n'
     '\t\t\tsys.call("/etc/init.d/passwall disable >/dev/null 2>&1")\n'

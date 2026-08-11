@@ -80,6 +80,7 @@ jobs:
           Xray 1.8.24 compatibility conversion and Linux 5.4 nftables blocking fixes are included.
           PassWall postboot startup closes stdin to prevent nftables pipe deadlocks.
           First-time PassWall enablement commits the selected node before enabling autostart and starting the service.
+          Saving PassWall settings while enabled reloads the running service so node changes take effect immediately.
           PZL8 SSIDs are restored after late QSDK wireless initialization.
           MosDNS, Quagga, ZeroTier, SMB, DDNS, Wake-on-LAN and IPv6 DHCP Relay are removed.
           A 96 MiB ZRAM service, 64 KiB log buffer and a 32768-entry conntrack limit are configured.
