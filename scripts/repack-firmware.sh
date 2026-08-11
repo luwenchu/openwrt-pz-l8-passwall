@@ -11,8 +11,8 @@ rootfs="$work/rootfs"
 ubi_root="$work/rootfs-data"
 output="$repo_root/output"
 package_cache="$work/package-cache"
-firmware_name="PZL8-2025-01-03-passwall-nft-xray-rootfs-factory.bin"
-uboot_recovery_name="PZL8-2025-01-03-passwall-nft-xray-uboot-recovery.bin"
+firmware_name="PZL8-2026-08-11-passwall-nft-xray-rootfs-factory.bin"
+uboot_recovery_name="PZL8-2026-08-11-passwall-nft-xray-uboot-recovery.bin"
 
 echo "$BASE_SHA256  $base" | sha256sum -c -
 test -d "$package_cache"
@@ -52,11 +52,11 @@ sudo python3 "$repo_root/scripts/install_ipks.py" \
 
 cat > "$work/openwrt_release" <<'EOF'
 DISTRIB_ID='PZL8'
-DISTRIB_RELEASE='23.05-SNAPSHOT'
-DISTRIB_REVISION='r0-6dee7e355-passwall'
+DISTRIB_RELEASE='2026.08.11'
+DISTRIB_REVISION='子安信息科技'
 DISTRIB_TARGET='ipq50xx/ipq50xx_32'
 DISTRIB_ARCH='arm_cortex-a7_neon-vfpv4'
-DISTRIB_DESCRIPTION='PZL8 23.05-SNAPSHOT r0-6dee7e355 PassWall'
+DISTRIB_DESCRIPTION='子安信息科技'
 DISTRIB_TAINTS='no-all busybox override'
 EOF
 cat > "$work/banner" <<'EOF'
@@ -66,9 +66,15 @@ cat > "$work/banner" <<'EOF'
 |  __/ / /_ | |___ > _ <
 |_|   /____||_____/|_| |_|
 ----------------------------
-PZL8 23.05-SNAPSHOT PassWall
+PZL8 2026.08.11
+子安信息科技
 ----------------------------
 EOF
+grep -Fq "DISTRIB_RELEASE='2026.08.11'" "$work/openwrt_release"
+grep -Fq "DISTRIB_REVISION='子安信息科技'" "$work/openwrt_release"
+grep -Fq "DISTRIB_DESCRIPTION='子安信息科技'" "$work/openwrt_release"
+grep -Fq 'PZL8 2026.08.11' "$work/banner"
+grep -Fq '子安信息科技' "$work/banner"
 cat > "$work/99-pzl8-passwall-rootfs" <<'EOF'
 #!/bin/sh
 
@@ -475,6 +481,10 @@ unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   etc/rc.local > "$work/verify-rc.local"
 unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   lib/upgrade/platform.sh > "$work/verify-platform.sh"
+unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  etc/openwrt_release > "$work/verify-openwrt-release"
+unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  etc/banner > "$work/verify-banner"
 test "$(grep -Fc "xray_legacy_compat.lua" \
   "$work/verify-passwall-app.sh")" -eq 1
 sh -n "$work/verify-passwall-app.sh"
@@ -493,6 +503,8 @@ grep -Fq '/usr/sbin/pzl8-postboot </dev/null' "$work/verify-rc.local"
 sh -n "$work/verify-pzl8-postboot.sh"
 sh -n "$work/verify-rc.local"
 cmp "$repo_root/scripts/pzl8-platform.sh" "$work/verify-platform.sh"
+cmp "$work/openwrt_release" "$work/verify-openwrt-release"
+cmp "$work/banner" "$work/verify-banner"
 grep -Fq 'target="$(pzl8_upgrade_target)"' "$work/verify-platform.sh"
 grep -Fq 'CI_UBIPART="$target"' "$work/verify-platform.sh"
 grep -Fq 'pzl8_commit_boot_slot' "$work/verify-platform.sh"
@@ -577,6 +589,9 @@ passwall_stdin_deadlock_fix=yes
 postboot_ssid_repair=yes
 passwall_default_enabled=no
 display_name=PZL8
+build_date=2026-08-11
+display_release=2026.08.11
+display_vendor=子安信息科技
 sysupgrade_board_parser=fixed
 sysupgrade_dual_slot=fixed
 xray_file=$(cat "$work/xray-file.txt")

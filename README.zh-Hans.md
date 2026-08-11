@@ -32,7 +32,7 @@ PassWall。
   kernel 和 rootfs 卷后再同步更新 `BOOTCONFIG`、`BOOTCONFIG1`。
 - 双槽升级脚本只使用 QSDK stage2 RAMFS 默认携带的命令，避免因 `tr`、`head`
   未复制到 RAMFS 而在写入前退出、随后仅重启回旧槽。
-- 构建额外输出 `PZL8-2025-01-03-passwall-nft-xray-uboot-recovery.bin`。
+- 构建额外输出 `PZL8-2026-08-11-passwall-nft-xray-uboot-recovery.bin`。
   该文件采用与官方刷机包相同的 FIT + `flash.scr` 形式，但只擦写当前双槽布局的
   两个 rootfs 区域，不改写 SBL1、MIBIB、BOOTCONFIG、QSEE、DEVCFG、CDT、
   APPSBL/U-Boot、ART 等引导或校准分区。
@@ -56,7 +56,7 @@ ttyd Web 终端及 ksmbd。由于这版 U-Boot 的单次 gzip `imxtract` 解压�
 通过 TFTP 加载后可执行：
 
 ```text
-tftpboot 0x44000000 PZL8-2025-01-03-passwall-nft-xray-uboot-recovery.bin
+tftpboot 0x44000000 PZL8-2026-08-11-passwall-nft-xray-uboot-recovery.bin
 setenv imgaddr 0x44000000
 source 0x44000000:script
 reset
@@ -82,7 +82,7 @@ b2464663e4d0693b5869c277d61542258b3562c40bfed3353faf071155fad7e3
 
 GitHub Actions 输出：
 
-- `PZL8-2025-01-03-passwall-nft-xray-rootfs-factory.bin`
+- `PZL8-2026-08-11-passwall-nft-xray-rootfs-factory.bin`
 - `sha256sums`
 - `build-manifest.txt`
 - `passwall-packages.txt`
