@@ -291,7 +291,7 @@ cat > "$work/pzl8-uboot-recovery.its" <<EOF
 /dts-v1/;
 
 / {
-  description = "PZL8 dual-slot rootfs-only U-Boot recovery";
+  description = "Flashing nand 800 20000";
   timestamp = <$fit_timestamp>;
   #address-cells = <1>;
 
@@ -332,7 +332,7 @@ python3 -c \
   'import pathlib, sys; assert pathlib.Path(sys.argv[1]).read_bytes()[:4] == b"\xd0\x0d\xfe\xed"' \
   "$output/$uboot_recovery_name"
 test "$(fdtget "$output/$uboot_recovery_name" / description)" = \
-  "PZL8 dual-slot rootfs-only U-Boot recovery"
+  "Flashing nand 800 20000"
 test "$(fdtget "$output/$uboot_recovery_name" /images/script description)" = \
   "flash.scr"
 test "$(fdtget "$output/$uboot_recovery_name" /images/script type)" = \
@@ -451,6 +451,7 @@ uboot_recovery_size=$uboot_recovery_size
 uboot_recovery_format=fit-script-plus-ubi
 uboot_recovery_builder=dtc-vendor-fit-compatible
 uboot_recovery_hash=crc32
+uboot_recovery_flash_geometry=nand-0x800-0x20000
 uboot_recovery_layout=dual-rootfs-only
 uboot_recovery_rootfs0_offset=0x00900000
 uboot_recovery_rootfs1_offset=0x04300000

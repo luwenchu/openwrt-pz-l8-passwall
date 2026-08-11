@@ -41,6 +41,9 @@ PassWall。
 
 U-Boot recovery 固件只适用于已经采用本仓库当前双 rootfs 分区布局的 CMCC
 PZL8。它不是 `single_to_sch` 分区转换包，不能用于仍为单 rootfs 布局的机器。
+FIT 根描述使用官方 U-Boot Web 识别的 `Flashing nand 800 20000`，其中
+`800`/`20000` 分别对应 2048 字节 NAND 页和 128 KiB 擦除块。不要把该文件
+上传到 LuCI 系统升级页面。
 
 通过 TFTP 加载后可执行：
 
