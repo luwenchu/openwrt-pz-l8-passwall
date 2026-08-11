@@ -3,13 +3,28 @@
 . /lib/functions/system.sh
 
 pzl8_board_compatible() {
-	tr '\000' '\n' < /proc/device-tree/compatible |
-		grep -m1 -E '^(cmcc,pzl8|cmcc,rax3000qy|redmi,ax3000-m79|redmi,ax3000-m81|cucc,vs010|rg,ma3063|axfh3)$'
+	local board
+
+	for board in \
+		cmcc,pzl8 \
+		cmcc,rax3000qy \
+		redmi,ax3000-m79 \
+		redmi,ax3000-m81 \
+		cucc,vs010 \
+		rg,ma3063 \
+		axfh3
+	do
+		if grep -a -q "$board" /proc/device-tree/compatible; then
+			echo "$board"
+			return 0
+		fi
+	done
+
+	return 1
 }
 
 pzl8_current_rootfs() {
-	sed -n 's/.*ubi.mtd=\([^ ]*\).*/\1/p' /proc/cmdline |
-		head -n 1
+	sed -n 's/.*ubi.mtd=\([^ ]*\).*/\1/p' /proc/cmdline
 }
 
 pzl8_upgrade_target() {

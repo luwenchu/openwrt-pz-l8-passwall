@@ -130,7 +130,7 @@ require_file "$rootfs/usr/share/passwall/nftables.sh"
 require_file "$rootfs/usr/sbin/pzl8-postboot"
 require_file "$rootfs/etc/rc.local"
 
-grep -Fq "tr '\\000' '\\n' < /proc/device-tree/compatible" \
+grep -Fq 'grep -a -q "$board" /proc/device-tree/compatible' \
   "$rootfs/lib/upgrade/platform.sh"
 grep -Fq "cmcc,pzl8" "$rootfs/lib/upgrade/platform.sh"
 grep -Fq 'target="$(pzl8_upgrade_target)"' "$rootfs/lib/upgrade/platform.sh"
@@ -138,6 +138,11 @@ grep -Fq 'CI_UBIPART="$target"' "$rootfs/lib/upgrade/platform.sh"
 grep -Fq 'pzl8_commit_boot_slot' "$rootfs/lib/upgrade/platform.sh"
 grep -Fq '0:BOOTCONFIG1' "$rootfs/lib/upgrade/platform.sh"
 grep -Fq '0:BOOTCONFIG' "$rootfs/lib/upgrade/platform.sh"
+if grep -Eq '(^|[[:space:]])(tr|head)([[:space:]]|$)' \
+  "$rootfs/lib/upgrade/platform.sh"; then
+  echo "RAMFS-unsafe tr/head dependency remains in platform.sh" >&2
+  exit 1
+fi
 if grep -Fq 'nand_do_upgrade "$1"' "$rootfs/lib/upgrade/platform.sh"; then
   echo "Unsafe active-slot nand_do_upgrade call remains in platform.sh" >&2
   exit 1

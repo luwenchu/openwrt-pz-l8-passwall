@@ -30,6 +30,8 @@ PassWall。
 - 修复 Web 不保留配置升级后仍启动旧固件：升级时读取 bootconfig 的
   `upgradepartition`，只写入非活动的 `rootfs`/`rootfs_1` 槽，校验 UBI 中的
   kernel 和 rootfs 卷后再同步更新 `BOOTCONFIG`、`BOOTCONFIG1`。
+- 双槽升级脚本只使用 QSDK stage2 RAMFS 默认携带的命令，避免因 `tr`、`head`
+  未复制到 RAMFS 而在写入前退出、随后仅重启回旧槽。
 
 ## 固定版本
 
