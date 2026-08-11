@@ -23,7 +23,9 @@ else
 fi
 
 echo "Extracting PZL8 UBI firmware"
-imxtract "$fitaddr" firmware || exit 1
+setenv recovery_addr 0x48000000
+imxtract "$fitaddr" firmware "$recovery_addr" || exit 1
+setenv fileaddr "$recovery_addr"
 
 echo "Writing rootfs slot 0 at 0x00900000"
 nand device 0 || exit 1

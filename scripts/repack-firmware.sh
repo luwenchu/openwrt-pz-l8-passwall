@@ -32,6 +32,16 @@ sudo python3 "$repo_root/scripts/install_ipks.py" \
   --remove-package luci-app-mosdns \
   --remove-package luci-i18n-mosdns-zh-cn \
   --remove-package v2dat \
+  --remove-package isc-dhcp-relay-ipv6 \
+  --remove-package quagga-watchquagga \
+  --remove-package quagga-vtysh \
+  --remove-package quagga-ripd \
+  --remove-package quagga-zebra \
+  --remove-package quagga-libzebra \
+  --remove-package quagga \
+  --remove-package luci-app-zerotier \
+  --remove-package luci-i18n-zerotier-zh-cn \
+  --remove-package zerotier \
   luci-app-passwall luci-i18n-passwall-zh-cn xray-core
 
 cat > "$work/openwrt_release" <<'EOF'
@@ -258,6 +268,9 @@ if [ "$firmware_size" -gt $((58 * 1024 * 1024)) ]; then
 fi
 
 firmware_size_hex="$(printf '0x%08x' "$firmware_size")"
+gzip -9 -n -c "$output/$firmware_name" > "$work/pzl8-uboot-firmware.bin.gz"
+gzip -t "$work/pzl8-uboot-firmware.bin.gz"
+recovery_payload_size="$(stat -c %s "$work/pzl8-uboot-firmware.bin.gz")"
 sed "s/@FIRMWARE_SIZE_HEX@/$firmware_size_hex/g" \
   "$repo_root/scripts/pzl8-uboot-recovery.scr.in" \
   > "$work/pzl8-uboot-recovery.scr"
@@ -268,7 +281,7 @@ script_crc32="$(python3 -c \
   "$work/pzl8-uboot-recovery.scr")"
 firmware_crc32="$(python3 -c \
   'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
-  "$output/$firmware_name")"
+  "$work/pzl8-uboot-firmware.bin.gz")"
 
 test "$(grep -c '^nand erase ' "$work/pzl8-uboot-recovery.scr")" -eq 2
 test "$(grep -c '^nand write ' "$work/pzl8-uboot-recovery.scr")" -eq 2
@@ -279,6 +292,10 @@ grep -Fq "nand erase 0x04300000 0x03a00000" \
 grep -Fq "nand write \"\$fileaddr\" 0x00900000 $firmware_size_hex" \
   "$work/pzl8-uboot-recovery.scr"
 grep -Fq "nand write \"\$fileaddr\" 0x04300000 $firmware_size_hex" \
+  "$work/pzl8-uboot-recovery.scr"
+grep -Fq 'setenv recovery_addr 0x48000000' \
+  "$work/pzl8-uboot-recovery.scr"
+grep -Fq 'imxtract "$fitaddr" firmware "$recovery_addr"' \
   "$work/pzl8-uboot-recovery.scr"
 if grep -Eq \
   'SBL1|MIBIB|BOOTCONFIG|QSEE|DEVCFG|CDT|APPSBL|ART|saveenv' \
@@ -291,9 +308,8 @@ cat > "$work/pzl8-uboot-recovery.its" <<EOF
 /dts-v1/;
 
 / {
-  description = "Flashing nand 800 20000";
   timestamp = <$fit_timestamp>;
-  #address-cells = <1>;
+  description = "Flashing nand 800 20000";
 
   images {
     script {
@@ -302,23 +318,21 @@ cat > "$work/pzl8-uboot-recovery.its" <<EOF
       type = "script";
       arch = "arm";
       compression = "none";
-      timestamp = <$fit_timestamp>;
       hash@1 {
-        algo = "crc32";
         value = <0x$script_crc32>;
+        algo = "crc32";
       };
     };
 
     firmware {
       description = "PZL8 PassWall UBI firmware";
-      data = /incbin/("$output/$firmware_name");
+      data = /incbin/("$work/pzl8-uboot-firmware.bin.gz");
       type = "firmware";
       arch = "arm";
-      compression = "none";
-      timestamp = <$fit_timestamp>;
+      compression = "gzip";
       hash@1 {
-        algo = "crc32";
         value = <0x$firmware_crc32>;
+        algo = "crc32";
       };
     };
   };
@@ -341,6 +355,8 @@ test "$(fdtget "$output/$uboot_recovery_name" /images/firmware description)" = \
   "PZL8 PassWall UBI firmware"
 test "$(fdtget "$output/$uboot_recovery_name" /images/firmware type)" = \
   "firmware"
+test "$(fdtget "$output/$uboot_recovery_name" /images/firmware compression)" = \
+  "gzip"
 test "$(fdtget "$output/$uboot_recovery_name" /images/script/hash@1 algo)" = \
   "crc32"
 test "$(fdtget "$output/$uboot_recovery_name" /images/firmware/hash@1 algo)" = \
@@ -356,18 +372,17 @@ cmp "$work/pzl8-uboot-recovery.scr" \
   "$work/verify-uboot-recovery/script.bin"
 cmp "$output/$firmware_name" \
   "$work/verify-uboot-recovery/firmware.bin"
+uboot_recovery_size="$(stat -c %s "$output/$uboot_recovery_name")"
+if [ "$uboot_recovery_size" -ge $((32 * 1024 * 1024)) ]; then
+  echo "U-Boot Web recovery image exceeds the 32 MiB HTTP limit" >&2
+  exit 1
+fi
 test "$script_crc32" = "$(python3 -c \
   'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
   "$work/verify-uboot-recovery/script.bin")"
 test "$firmware_crc32" = "$(python3 -c \
   'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
-  "$work/verify-uboot-recovery/firmware.bin")"
-
-uboot_recovery_size="$(stat -c %s "$output/$uboot_recovery_name")"
-if [ "$uboot_recovery_size" -gt $((64 * 1024 * 1024)) ]; then
-  echo "U-Boot recovery FIT exceeds the 64 MiB load budget" >&2
-  exit 1
-fi
+  "$work/pzl8-uboot-firmware.bin.gz")"
 
 python3 "$repo_root/scripts/extract_ubi.py" \
   "$output/$firmware_name" "$work/verify-volumes"
@@ -432,6 +447,17 @@ if unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   echo "MosDNS v2dat helper was not removed from the repacked rootfs" >&2
   exit 1
 fi
+for removed_path in \
+  usr/sbin/dhcrelay \
+  usr/bin/zerotier-one \
+  usr/bin/vtysh \
+  usr/sbin/zebra; do
+  if unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+    "$removed_path" >/dev/null 2>&1; then
+    echo "Optional U-Boot Web size reduction file remains: $removed_path" >&2
+    exit 1
+  fi
+done
 
 cp "$work/passwall-packages.txt" "$output/passwall-packages.txt"
 (
@@ -451,6 +477,11 @@ uboot_recovery_size=$uboot_recovery_size
 uboot_recovery_format=fit-script-plus-ubi
 uboot_recovery_builder=dtc-vendor-fit-compatible
 uboot_recovery_hash=crc32
+uboot_recovery_compression=gzip
+uboot_recovery_payload_size=$recovery_payload_size
+uboot_recovery_uncompressed_size=$firmware_size
+uboot_recovery_decompress_address=0x48000000
+uboot_recovery_http_limit=0x02000000
 uboot_recovery_flash_geometry=nand-0x800-0x20000
 uboot_recovery_layout=dual-rootfs-only
 uboot_recovery_rootfs0_offset=0x00900000
@@ -468,7 +499,7 @@ architecture=arm_cortex-a7_neon-vfpv4
 kernel_preserved=yes
 rootfs_repacked=yes
 passwall_location=squashfs
-removed_packages=mosdns,luci-app-mosdns,luci-i18n-mosdns-zh-cn,v2dat
+removed_packages=mosdns,luci-app-mosdns,luci-i18n-mosdns-zh-cn,v2dat,isc-dhcp-relay-ipv6,quagga-watchquagga,quagga-vtysh,quagga-ripd,quagga-zebra,quagga-libzebra,quagga,luci-app-zerotier,luci-i18n-zerotier-zh-cn,zerotier
 passwall_mode=nftables
 passwall_core=xray
 passwall_xray_1x_compat=yes

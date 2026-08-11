@@ -45,6 +45,11 @@ FIT 根描述使用官方 U-Boot Web 识别的 `Flashing nand 800 20000`，其�
 `800`/`20000` 分别对应 2048 字节 NAND 页和 128 KiB 擦除块。不要把该文件
 上传到 LuCI 系统升级页面。
 
+设备自带 U-Boot Web 的 HTTP 上传程序有 32 MiB 硬限制。recovery FIT 因此
+使用 U-Boot 支持的 gzip 载荷，在 RAM 地址 `0x48000000` 解压后再写入两个
+rootfs 槽。为保留足够的上传余量，测试固件移除了不影响中文、Argon、
+PassWall/Xray、QSDK 无线或 NSS 的 IPv6 DHCP Relay、Quagga 和 ZeroTier。
+
 通过 TFTP 加载后可执行：
 
 ```text

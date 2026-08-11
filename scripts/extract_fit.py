@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import gzip
 import pathlib
 import re
 import struct
@@ -140,10 +141,21 @@ def main():
                 f"{node} CRC32 mismatch: {actual_crc:08x} != {expected_crc:08x}"
             )
 
-        destination = output / f"{node}.bin"
-        destination.write_bytes(payload)
         image_type = text_property(properties, path, "type") or "unknown"
-        print(f"{node}\t{len(payload)}\t{image_type}\t{actual_crc:08x}")
+        compression = text_property(properties, path, "compression") or "none"
+        if compression == "none":
+            extracted = payload
+        elif compression == "gzip":
+            extracted = gzip.decompress(payload)
+        else:
+            raise ValueError(f"{node} uses unsupported compression: {compression}")
+
+        destination = output / f"{node}.bin"
+        destination.write_bytes(extracted)
+        print(
+            f"{node}\t{len(payload)}\t{len(extracted)}\t"
+            f"{image_type}\t{compression}\t{actual_crc:08x}"
+        )
 
 
 if __name__ == "__main__":
