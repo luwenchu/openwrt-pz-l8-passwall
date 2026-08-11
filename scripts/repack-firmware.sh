@@ -72,7 +72,7 @@ sudo python3 "$repo_root/scripts/install_ipks.py" \
   --remove-package-prefix luci-i18n-ksmbd \
   --remove-package-prefix ddns-scripts \
   --remove-package-prefix zerotier \
-  luci-app-passwall luci-i18n-passwall-zh-cn xray-core
+  swap-utils luci-app-passwall luci-i18n-passwall-zh-cn xray-core
 
 cat > "$work/openwrt_release" <<'EOF'
 DISTRIB_ID='PZL8'
@@ -310,7 +310,14 @@ else
   exit 1
 fi
 for swap_tool in mkswap swapon swapoff; do
-  if ! find "$rootfs" -type f -o -type l | grep -Eq "/$swap_tool$"; then
+  swap_tool_found=0
+  for swap_tool_dir in bin sbin usr/bin usr/sbin; do
+    if sudo test -e "$rootfs/$swap_tool_dir/$swap_tool"; then
+      swap_tool_found=1
+      break
+    fi
+  done
+  if [ "$swap_tool_found" -ne 1 ]; then
     echo "Required ZRAM swap tool is missing: $swap_tool" >&2
     exit 1
   fi

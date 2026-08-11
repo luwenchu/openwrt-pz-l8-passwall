@@ -12,6 +12,7 @@ PassWall。
   Samba/ksmbd、动态 DNS、网络唤醒、IPv6 DHCP Relay 和 ttyd；保留 Xray
   使用的 GeoIP/GeoSite 数据。
 - 启用 96 MiB ZRAM 压缩交换，交换设备仅位于内存，不在 NAND 上建立 swap。
+  `mkswap` 由同一 OpenWrt 23.05 SDK 构建的 `swap-utils` 提供。
 - 将系统日志环形缓冲限制为 64 KiB，连接跟踪表限制为 32768 项，并缩短长期
   空闲连接的回收时间，降低 256 MiB 机型的常驻内存压力。
 - 保留原 kernel、DTB、QSDK WiFi、NSS 和全部 reserved-memory 布局，不通过
