@@ -186,6 +186,10 @@ test "$(grep -Fc "xray_legacy_compat.lua" \
   "$rootfs/usr/share/passwall/app.sh")" -eq 1
 grep -Fq "if \$XRAY_BIN version 2>/dev/null | head -n1 | grep -q '^Xray 1\\.'; then" \
   "$rootfs/usr/share/passwall/app.sh"
+grep -Fq 'uci:get_all("passwall", node_id) or {}' \
+  "$rootfs/usr/share/passwall/xray_legacy_compat.lua"
+grep -Fq 'if outbound.protocol == "vless" then' \
+  "$rootfs/usr/share/passwall/xray_legacy_compat.lua"
 sh -n "$rootfs/usr/share/passwall/app.sh"
 if grep -Fq "counter reject" "$rootfs/usr/share/passwall/nftables.sh"; then
   echo "Unsupported nftables reject action remains in PassWall" >&2
@@ -487,6 +491,10 @@ unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   etc/banner > "$work/verify-banner"
 test "$(grep -Fc "xray_legacy_compat.lua" \
   "$work/verify-passwall-app.sh")" -eq 1
+grep -Fq 'uci:get_all("passwall", node_id) or {}' \
+  "$work/verify-xray-legacy-compat.lua"
+grep -Fq 'if outbound.protocol == "vless" then' \
+  "$work/verify-xray-legacy-compat.lua"
 sh -n "$work/verify-passwall-app.sh"
 cmp "$repo_root/scripts/xray-legacy-compat.lua" \
   "$work/verify-xray-legacy-compat.lua"
@@ -584,6 +592,7 @@ removed_packages=mosdns,luci-app-mosdns,luci-i18n-mosdns-zh-cn,v2dat,isc-dhcp-re
 passwall_mode=nftables
 passwall_core=xray
 passwall_xray_1x_compat=yes
+passwall_vless_first_apply_fix=yes
 passwall_nft_block_action=drop
 passwall_stdin_deadlock_fix=yes
 postboot_ssid_repair=yes

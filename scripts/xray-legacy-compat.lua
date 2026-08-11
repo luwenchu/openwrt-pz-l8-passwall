@@ -12,10 +12,7 @@ local input = assert(io.open(path, "r"))
 local config = assert(jsonc.parse(input:read("*a")))
 input:close()
 
-local node = uci:get_all("passwall", node_id)
-if not node then
-	os.exit(1)
-end
+local node = uci:get_all("passwall", node_id) or {}
 
 local changed = false
 for _, outbound in ipairs(config.outbounds or {}) do
@@ -32,7 +29,7 @@ for _, outbound in ipairs(config.outbounds or {}) do
 		end
 	end
 
-	if outbound.protocol == "vless" and node.protocol == "vless" then
+	if outbound.protocol == "vless" then
 		local settings = outbound.settings or {}
 		local vnext = settings.vnext
 		if settings.address or type(vnext) ~= "table" or #vnext == 0 then
@@ -56,7 +53,7 @@ for _, outbound in ipairs(config.outbounds or {}) do
 		end
 	end
 
-	if outbound.protocol == "shadowsocks" and node.protocol == "shadowsocks" then
+	if outbound.protocol == "shadowsocks" then
 		local settings = outbound.settings or {}
 		local servers = settings.servers
 		if settings.address or type(servers) ~= "table" or #servers == 0 then
