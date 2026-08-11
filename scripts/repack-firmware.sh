@@ -294,7 +294,7 @@ cat > "$work/pzl8-uboot-recovery.its" <<EOF
       arch = "arm";
       compression = "none";
       hash@1 {
-        algo = "sha1";
+        algo = "crc32";
       };
     };
 
@@ -305,16 +305,8 @@ cat > "$work/pzl8-uboot-recovery.its" <<EOF
       arch = "arm";
       compression = "none";
       hash@1 {
-        algo = "sha1";
+        algo = "crc32";
       };
-    };
-  };
-
-  configurations {
-    default = "config@1";
-    config@1 {
-      description = "PZL8 dual-slot rootfs recovery";
-      script = "script";
     };
   };
 };
