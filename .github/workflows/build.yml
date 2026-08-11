@@ -58,6 +58,8 @@ jobs:
           key: ${{ steps.package-cache.outputs.cache-primary-key }}
 
       - name: Repack and verify firmware
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           chmod +x scripts/*.sh
           scripts/repack-firmware.sh

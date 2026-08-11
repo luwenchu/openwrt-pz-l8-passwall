@@ -21,9 +21,20 @@ rm -rf "$volumes" "$rootfs" "$ubi_root" "$output"
 mkdir -p "$volumes" "$ubi_root/upper" "$ubi_root/work" "$output" \
   "$work/downloads"
 
-if [ ! -f "$pinned_uboot_recovery" ]; then
-  curl -fL --retry 3 --retry-delay 2 \
-    -o "$pinned_uboot_recovery" "$UBOOT_RECOVERY_URL"
+if ! echo "$UBOOT_RECOVERY_SHA256  $pinned_uboot_recovery" |
+  sha256sum -c - >/dev/null 2>&1; then
+  rm -f "$pinned_uboot_recovery" "$pinned_uboot_recovery.part"
+  if command -v gh >/dev/null 2>&1 && [ -n "${GH_TOKEN:-}" ]; then
+    gh release download "$UBOOT_RECOVERY_TAG" \
+      --repo "$UBOOT_RECOVERY_REPO" \
+      --pattern "$UBOOT_RECOVERY_FILE" \
+      --dir "$work/downloads" \
+      --clobber
+  else
+    curl -fL --retry 3 --retry-delay 2 \
+      -o "$pinned_uboot_recovery.part" "$UBOOT_RECOVERY_URL"
+    mv "$pinned_uboot_recovery.part" "$pinned_uboot_recovery"
+  fi
 fi
 echo "$UBOOT_RECOVERY_SHA256  $pinned_uboot_recovery" | sha256sum -c -
 test "$(stat -c %s "$pinned_uboot_recovery")" -eq "$UBOOT_RECOVERY_SIZE"
