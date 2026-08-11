@@ -145,6 +145,8 @@ sudo python3 "$repo_root/scripts/patch-passwall-xray-legacy.py" \
   "$rootfs/usr/share/passwall/app.sh"
 sudo python3 "$repo_root/scripts/patch-passwall-nft-reject.py" \
   "$rootfs/usr/share/passwall/nftables.sh"
+sudo python3 "$repo_root/scripts/patch-passwall-autostart.py" \
+  "$rootfs/usr/lib/lua/luci/passwall/api.lua"
 
 require_file() {
   if [ ! -f "$1" ]; then
@@ -161,6 +163,7 @@ require_file "$rootfs/lib/upgrade/platform.sh"
 require_file "$rootfs/usr/share/passwall/app.sh"
 require_file "$rootfs/usr/share/passwall/xray_legacy_compat.lua"
 require_file "$rootfs/usr/share/passwall/nftables.sh"
+require_file "$rootfs/usr/lib/lua/luci/passwall/api.lua"
 require_file "$rootfs/usr/sbin/pzl8-postboot"
 require_file "$rootfs/etc/rc.local"
 
@@ -201,6 +204,12 @@ grep -Fq 'uci:get_all("passwall", node_id) or {}' \
   "$rootfs/usr/share/passwall/xray_legacy_compat.lua"
 grep -Fq 'if outbound.protocol == "vless" then' \
   "$rootfs/usr/share/passwall/xray_legacy_compat.lua"
+grep -Fq 'local old_on_after_commit = map.on_after_commit' \
+  "$rootfs/usr/lib/lua/luci/passwall/api.lua"
+grep -Fq 'if map.config ~= appname then return end' \
+  "$rootfs/usr/lib/lua/luci/passwall/api.lua"
+grep -Fq 'sys.call("/etc/init.d/passwall " .. action' \
+  "$rootfs/usr/lib/lua/luci/passwall/api.lua"
 sh -n "$rootfs/usr/share/passwall/app.sh"
 if grep -Fq "counter reject" "$rootfs/usr/share/passwall/nftables.sh"; then
   echo "Unsupported nftables reject action remains in PassWall" >&2
@@ -395,6 +404,8 @@ unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
 unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   usr/share/passwall/nftables.sh > "$work/verify-passwall-nftables.sh"
 unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  usr/lib/lua/luci/passwall/api.lua > "$work/verify-passwall-api.lua"
+unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   usr/sbin/pzl8-postboot > "$work/verify-pzl8-postboot.sh"
 unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   etc/rc.local > "$work/verify-rc.local"
@@ -410,6 +421,12 @@ grep -Fq 'uci:get_all("passwall", node_id) or {}' \
   "$work/verify-xray-legacy-compat.lua"
 grep -Fq 'if outbound.protocol == "vless" then' \
   "$work/verify-xray-legacy-compat.lua"
+grep -Fq 'local old_on_after_commit = map.on_after_commit' \
+  "$work/verify-passwall-api.lua"
+grep -Fq 'if map.config ~= appname then return end' \
+  "$work/verify-passwall-api.lua"
+grep -Fq 'sys.call("/etc/init.d/passwall " .. action' \
+  "$work/verify-passwall-api.lua"
 sh -n "$work/verify-passwall-app.sh"
 cmp "$repo_root/scripts/xray-legacy-compat.lua" \
   "$work/verify-xray-legacy-compat.lua"
@@ -533,6 +550,7 @@ passwall_mode=nftables
 passwall_core=xray
 passwall_xray_1x_compat=yes
 passwall_vless_first_apply_fix=yes
+passwall_first_enable_autostart_fix=yes
 passwall_nft_block_action=drop
 passwall_stdin_deadlock_fix=yes
 postboot_ssid_repair=yes

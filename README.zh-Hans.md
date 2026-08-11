@@ -20,6 +20,8 @@ PassWall。
   Linux 5.4 nftables；这也用于阻断 UDP 443，避免 QUIC 绕过仅 TCP 的代理。
 - PassWall 开机兜底启动显式关闭标准输入，避免其 nftables 管道中的 `cat`
   等待 EOF，导致启动流程停在“开始加载 nftables 防火墙规则”。
+- PassWall 客户端配置保存并应用后会把全局开关同步到开机启动项；首次启用即使
+  晚于 90 秒 postboot 检查，也会自动设置开机自启。
 - 包含 PassWall 中文 LuCI 翻译。
 - LuCI 发行版名称和 SSH 登录横幅显示为 `PZL8`。
 - 首次启动时默认无线名称为 `PZL8_2.4G_0` 和 `PZL8_5G_1`。
