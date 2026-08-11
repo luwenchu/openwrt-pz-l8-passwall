@@ -262,6 +262,14 @@ sed "s/@FIRMWARE_SIZE_HEX@/$firmware_size_hex/g" \
   "$repo_root/scripts/pzl8-uboot-recovery.scr.in" \
   > "$work/pzl8-uboot-recovery.scr"
 
+fit_timestamp="${SOURCE_DATE_EPOCH:-$(git -C "$repo_root" log -1 --format=%ct)}"
+script_crc32="$(python3 -c \
+  'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
+  "$work/pzl8-uboot-recovery.scr")"
+firmware_crc32="$(python3 -c \
+  'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
+  "$output/$firmware_name")"
+
 test "$(grep -c '^nand erase ' "$work/pzl8-uboot-recovery.scr")" -eq 2
 test "$(grep -c '^nand write ' "$work/pzl8-uboot-recovery.scr")" -eq 2
 grep -Fq "nand erase 0x00900000 0x03a00000" \
@@ -284,19 +292,20 @@ cat > "$work/pzl8-uboot-recovery.its" <<EOF
 
 / {
   description = "PZL8 dual-slot rootfs-only U-Boot recovery";
+  timestamp = <$fit_timestamp>;
   #address-cells = <1>;
 
   images {
-    default = "script";
-
     script {
       description = "flash.scr";
       data = /incbin/("$work/pzl8-uboot-recovery.scr");
       type = "script";
       arch = "arm";
       compression = "none";
+      timestamp = <$fit_timestamp>;
       hash@1 {
         algo = "crc32";
+        value = <0x$script_crc32>;
       };
     };
 
@@ -306,15 +315,21 @@ cat > "$work/pzl8-uboot-recovery.its" <<EOF
       type = "firmware";
       arch = "arm";
       compression = "none";
+      timestamp = <$fit_timestamp>;
       hash@1 {
         algo = "crc32";
+        value = <0x$firmware_crc32>;
       };
     };
   };
 };
 EOF
 
-mkimage -f "$work/pzl8-uboot-recovery.its" \
+dtc -I dts -O dtb \
+  -o "$output/$uboot_recovery_name" \
+  "$work/pzl8-uboot-recovery.its"
+python3 -c \
+  'import pathlib, sys; assert pathlib.Path(sys.argv[1]).read_bytes()[:4] == b"\xd0\x0d\xfe\xed"' \
   "$output/$uboot_recovery_name"
 dumpimage -l "$output/$uboot_recovery_name" |
   tee "$work/pzl8-uboot-recovery-list.txt"
@@ -329,6 +344,12 @@ dumpimage -T flat_dt -p 1 -o "$work/verify-uboot-recovery-ubi.bin" \
   "$output/$uboot_recovery_name"
 cmp "$work/pzl8-uboot-recovery.scr" "$work/verify-uboot-recovery.scr"
 cmp "$output/$firmware_name" "$work/verify-uboot-recovery-ubi.bin"
+test "$script_crc32" = "$(python3 -c \
+  'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
+  "$work/verify-uboot-recovery.scr")"
+test "$firmware_crc32" = "$(python3 -c \
+  'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
+  "$work/verify-uboot-recovery-ubi.bin")"
 
 uboot_recovery_size="$(stat -c %s "$output/$uboot_recovery_name")"
 if [ "$uboot_recovery_size" -gt $((64 * 1024 * 1024)) ]; then
@@ -416,6 +437,8 @@ uboot_recovery_file=$uboot_recovery_name
 uboot_recovery_sha256=$(sha256sum "$output/$uboot_recovery_name" | awk '{print $1}')
 uboot_recovery_size=$uboot_recovery_size
 uboot_recovery_format=fit-script-plus-ubi
+uboot_recovery_builder=dtc-vendor-fit-compatible
+uboot_recovery_hash=crc32
 uboot_recovery_layout=dual-rootfs-only
 uboot_recovery_rootfs0_offset=0x00900000
 uboot_recovery_rootfs1_offset=0x04300000
