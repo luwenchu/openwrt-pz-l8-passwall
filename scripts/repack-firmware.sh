@@ -42,6 +42,9 @@ sudo python3 "$repo_root/scripts/install_ipks.py" \
   --remove-package luci-app-zerotier \
   --remove-package luci-i18n-zerotier-zh-cn \
   --remove-package zerotier \
+  --remove-package luci-app-ttyd \
+  --remove-package luci-i18n-ttyd-zh-cn \
+  --remove-package ttyd \
   luci-app-passwall luci-i18n-passwall-zh-cn xray-core
 
 cat > "$work/openwrt_release" <<'EOF'
@@ -450,6 +453,7 @@ fi
 for removed_path in \
   usr/sbin/dhcrelay \
   usr/bin/zerotier-one \
+  usr/bin/ttyd \
   usr/bin/vtysh \
   usr/sbin/zebra; do
   if unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
@@ -499,7 +503,7 @@ architecture=arm_cortex-a7_neon-vfpv4
 kernel_preserved=yes
 rootfs_repacked=yes
 passwall_location=squashfs
-removed_packages=mosdns,luci-app-mosdns,luci-i18n-mosdns-zh-cn,v2dat,isc-dhcp-relay-ipv6,quagga-watchquagga,quagga-vtysh,quagga-ripd,quagga-zebra,quagga-libzebra,quagga,luci-app-zerotier,luci-i18n-zerotier-zh-cn,zerotier
+removed_packages=mosdns,luci-app-mosdns,luci-i18n-mosdns-zh-cn,v2dat,isc-dhcp-relay-ipv6,quagga-watchquagga,quagga-vtysh,quagga-ripd,quagga-zebra,quagga-libzebra,quagga,luci-app-zerotier,luci-i18n-zerotier-zh-cn,zerotier,luci-app-ttyd,luci-i18n-ttyd-zh-cn,ttyd
 passwall_mode=nftables
 passwall_core=xray
 passwall_xray_1x_compat=yes

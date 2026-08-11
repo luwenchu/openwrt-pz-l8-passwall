@@ -48,7 +48,8 @@ FIT 根描述使用官方 U-Boot Web 识别的 `Flashing nand 800 20000`，其�
 设备自带 U-Boot Web 的 HTTP 上传程序有 32 MiB 硬限制。recovery FIT 因此
 使用 U-Boot 支持的 gzip 载荷，在 RAM 地址 `0x48000000` 解压后再写入两个
 rootfs 槽。为保留足够的上传余量，测试固件移除了不影响中文、Argon、
-PassWall/Xray、QSDK 无线或 NSS 的 IPv6 DHCP Relay、Quagga 和 ZeroTier。
+PassWall/Xray、QSDK 无线或 NSS 的 IPv6 DHCP Relay、Quagga、ZeroTier 和
+ttyd Web 终端。
 
 通过 TFTP 加载后可执行：
 
