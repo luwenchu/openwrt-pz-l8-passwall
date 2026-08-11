@@ -47,13 +47,13 @@ jobs:
             pzl8-packages-
 
       - name: Build PassWall packages
-        if: steps.package-cache.outputs.cache-matched-key == ''
+        if: steps.package-cache.outputs.cache-hit != 'true'
         run: |
           chmod +x scripts/*.sh
           scripts/build-passwall.sh
 
       - name: Save compiled packages
-        if: steps.package-cache.outputs.cache-matched-key == ''
+        if: steps.package-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: work/package-cache
