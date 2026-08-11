@@ -42,7 +42,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: work/package-cache
-          key: pzl8-packages-${{ hashFiles('pins.env', 'scripts/build-passwall.sh') }}
+          key: pzl8-packages-${{ hashFiles('package-cache.lock', 'scripts/build-passwall.sh') }}
+          restore-keys: |
+            pzl8-packages-
 
       - name: Build PassWall packages
         if: steps.package-cache.outputs.cache-hit != 'true'
