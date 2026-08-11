@@ -10,6 +10,8 @@ PassWall。
 - 将 PassWall/Xray 写入只读 SquashFS，保留配置刷机也不会覆盖插件。
 - 移除 MosDNS、其 LuCI 文件及专用 `v2dat` 工具，为 PassWall/Xray 腾出
   SquashFS 空间；保留 Xray 使用的 GeoIP/GeoSite 数据。
+- LuCI/Web 升级镜像保留基底固件原有的 IPv6 DHCP Relay、Quagga 和
+  ZeroTier，不因 U-Boot Web 的 32 MiB 限制删减这些功能。
 - PassWall 只启用 nftables 透明代理。
 - 只预置 Xray 核心，不加入 Sing-Box、SSR、Hysteria、NaiveProxy 等额外核心。
 - 为内置 Xray 1.8.24 加入兼容层：启动时仅对 Xray 1.x 将新版 PassWall 生成的
@@ -53,6 +55,11 @@ ttyd Web 终端及 ksmbd。由于这版 U-Boot 的单次 gzip `imxtract` 解压�
 8 MiB，recovery 会把 UBI 分为多个不超过 7 MiB 的节点，依次解压到连续 RAM
 后再整体写入。
 
+U-Boot recovery 固件固定复用 `pzl8-passwall-656ca3f` 已验证附件，SHA-256
+必须为
+`027bccc7394d8ae6149cf3a9270747f1a90d1b683b0903dd8a7f2b19207b5fce`。
+构建只扩充 LuCI/Web 升级镜像，不能重新生成或改变该 recovery 文件。
+
 通过 TFTP 加载后可执行：
 
 ```text
@@ -83,12 +90,14 @@ b2464663e4d0693b5869c277d61542258b3562c40bfed3353faf071155fad7e3
 GitHub Actions 输出：
 
 - `PZL8-2026-08-11-passwall-nft-xray-rootfs-factory.bin`
+- `PZL8-2026-08-11-passwall-nft-xray-uboot-recovery.bin`（锁定原文件）
 - `sha256sums`
 - `build-manifest.txt`
 - `passwall-packages.txt`
 
 `build-manifest.txt` 会记录基底与成品哈希、UBI 卷参数、overlay 大小、Xray ELF
-架构、Xray 1.x 兼容层、nftables 阻断动作和 PassWall 默认状态。
+架构、Xray 1.x 兼容层、nftables 阻断动作、Web 镜像恢复的软件包、锁定的
+U-Boot recovery 来源和 PassWall 默认状态。
 
 ## 风险边界
 

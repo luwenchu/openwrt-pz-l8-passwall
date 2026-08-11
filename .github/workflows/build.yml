@@ -77,8 +77,9 @@ jobs:
           PassWall postboot startup closes stdin to prevent nftables pipe deadlocks.
           PZL8 SSIDs are restored after late QSDK wireless initialization.
           MosDNS and its dedicated v2dat helper are removed to provide rootfs capacity.
+          The Web upgrade image retains IPv6 DHCP Relay, Quagga and ZeroTier.
           CMCC PZL8 Web sysupgrade writes the inactive rootfs slot and persists the bootconfig switch.
-          A rootfs-only dual-slot U-Boot recovery FIT is included as a separate test artifact.
+          The byte-locked 656ca3f rootfs-only U-Boot recovery FIT is included unchanged.
           Physical boot and throughput still require router testing."
 
           if gh release view "$tag" >/dev/null 2>&1; then
