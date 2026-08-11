@@ -9,6 +9,7 @@ PATCH = (
     "\tlocal old_on_after_commit = map.on_after_commit\n"
     "\tmap.on_after_commit = function(self)\n"
     "\t\tif old_on_after_commit then old_on_after_commit(self) end\n"
+    "\t\tif self.uci then self.uci:commit(appname) end\n"
     '\t\tlocal enabled = self:get("@global[0]", "enabled")\n'
     '\t\tlocal init_enabled = sys.call("/etc/init.d/passwall enabled >/dev/null 2>&1") == 0\n'
     '\t\tif enabled == "1" then\n'
