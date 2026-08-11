@@ -32,6 +32,28 @@ PassWall。
   kernel 和 rootfs 卷后再同步更新 `BOOTCONFIG`、`BOOTCONFIG1`。
 - 双槽升级脚本只使用 QSDK stage2 RAMFS 默认携带的命令，避免因 `tr`、`head`
   未复制到 RAMFS 而在写入前退出、随后仅重启回旧槽。
+- 构建额外输出 `PZL8-2025-01-03-passwall-nft-xray-uboot-recovery.bin`。
+  该文件采用与官方刷机包相同的 FIT + `flash.scr` 形式，但只擦写当前双槽布局的
+  两个 rootfs 区域，不改写 SBL1、MIBIB、BOOTCONFIG、QSEE、DEVCFG、CDT、
+  APPSBL/U-Boot、ART 等引导或校准分区。
+
+## U-Boot 救援固件
+
+U-Boot recovery 固件只适用于已经采用本仓库当前双 rootfs 分区布局的 CMCC
+PZL8。它不是 `single_to_sch` 分区转换包，不能用于仍为单 rootfs 布局的机器。
+
+通过 TFTP 加载后可执行：
+
+```text
+tftpboot 0x44000000 PZL8-2025-01-03-passwall-nft-xray-uboot-recovery.bin
+setenv imgaddr 0x44000000
+source 0x44000000:script
+reset
+```
+
+脚本会校验 IPQ5018 `soc_hw_version`/`machid`，随后把同一 UBI 镜像写入
+`0x00900000` 和 `0x04300000` 两个 58 MiB rootfs 槽。执行前应保留 TTL，
+并确认设备分区布局与本仓库验证的 PZL8 双槽布局一致。
 
 ## 固定版本
 

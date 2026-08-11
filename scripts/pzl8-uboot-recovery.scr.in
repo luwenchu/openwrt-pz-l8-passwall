@@ -1,0 +1,40 @@
+if test -n "$soc_hw_version"; then
+	if test "$soc_hw_version" = "20180100" || test "$soc_hw_version" = "20180101"; then
+		echo "soc_hw_version validation passed"
+	else
+		echo "Unsupported soc_hw_version; aborting"
+		exit 1
+	fi
+else
+	echo "soc_hw_version unavailable; continuing with machid validation"
+fi
+
+if test "$machid" = "8040000" || test "$machid" = "8040010"; then
+	echo "machid validation passed"
+else
+	echo "Unsupported or missing machid; aborting"
+	exit 1
+fi
+
+if test -n "$imgaddr"; then
+	setenv fitaddr "$imgaddr"
+else
+	setenv fitaddr "$fileaddr"
+fi
+
+echo "Extracting PZL8 UBI firmware"
+imxtract "$fitaddr" firmware || exit 1
+
+echo "Writing rootfs slot 0 at 0x00900000"
+nand device 0 || exit 1
+nand erase 0x00900000 0x03a00000 || exit 1
+nand write "$fileaddr" 0x00900000 @FIRMWARE_SIZE_HEX@ || exit 1
+
+echo "Writing rootfs slot 1 at 0x04300000"
+nand erase 0x04300000 0x03a00000 || exit 1
+nand write "$fileaddr" 0x04300000 @FIRMWARE_SIZE_HEX@ || exit 1
+
+echo "PZL8 dual-slot U-Boot recovery flash completed"
+echo "Both rootfs slots now contain the same firmware"
+echo "Run reset to boot"
+exit 0

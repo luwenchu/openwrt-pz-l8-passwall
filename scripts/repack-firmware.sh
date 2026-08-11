@@ -12,6 +12,7 @@ ubi_root="$work/rootfs-data"
 output="$repo_root/output"
 package_cache="$work/package-cache"
 firmware_name="PZL8-2025-01-03-passwall-nft-xray-rootfs-factory.bin"
+uboot_recovery_name="PZL8-2025-01-03-passwall-nft-xray-uboot-recovery.bin"
 
 echo "$BASE_SHA256  $base" | sha256sum -c -
 test -d "$package_cache"
@@ -256,6 +257,91 @@ if [ "$firmware_size" -gt $((58 * 1024 * 1024)) ]; then
   exit 1
 fi
 
+firmware_size_hex="$(printf '0x%08x' "$firmware_size")"
+sed "s/@FIRMWARE_SIZE_HEX@/$firmware_size_hex/g" \
+  "$repo_root/scripts/pzl8-uboot-recovery.scr.in" \
+  > "$work/pzl8-uboot-recovery.scr"
+
+test "$(grep -c '^nand erase ' "$work/pzl8-uboot-recovery.scr")" -eq 2
+test "$(grep -c '^nand write ' "$work/pzl8-uboot-recovery.scr")" -eq 2
+grep -Fq "nand erase 0x00900000 0x03a00000" \
+  "$work/pzl8-uboot-recovery.scr"
+grep -Fq "nand erase 0x04300000 0x03a00000" \
+  "$work/pzl8-uboot-recovery.scr"
+grep -Fq "nand write \"\$fileaddr\" 0x00900000 $firmware_size_hex" \
+  "$work/pzl8-uboot-recovery.scr"
+grep -Fq "nand write \"\$fileaddr\" 0x04300000 $firmware_size_hex" \
+  "$work/pzl8-uboot-recovery.scr"
+if grep -Eq \
+  'SBL1|MIBIB|BOOTCONFIG|QSEE|DEVCFG|CDT|APPSBL|ART|saveenv' \
+  "$work/pzl8-uboot-recovery.scr"; then
+  echo "U-Boot recovery script references protected partitions" >&2
+  exit 1
+fi
+
+cat > "$work/pzl8-uboot-recovery.its" <<EOF
+/dts-v1/;
+
+/ {
+  description = "PZL8 dual-slot rootfs-only U-Boot recovery";
+  #address-cells = <1>;
+
+  images {
+    script {
+      description = "flash.scr";
+      data = /incbin/("$work/pzl8-uboot-recovery.scr");
+      type = "script";
+      arch = "arm";
+      compression = "none";
+      hash@1 {
+        algo = "sha1";
+      };
+    };
+
+    firmware {
+      description = "PZL8 PassWall UBI firmware";
+      data = /incbin/("$output/$firmware_name");
+      type = "firmware";
+      arch = "arm";
+      compression = "none";
+      hash@1 {
+        algo = "sha1";
+      };
+    };
+  };
+
+  configurations {
+    default = "config@1";
+    config@1 {
+      description = "PZL8 dual-slot rootfs recovery";
+      script = "script";
+    };
+  };
+};
+EOF
+
+mkimage -f "$work/pzl8-uboot-recovery.its" \
+  "$output/$uboot_recovery_name"
+dumpimage -l "$output/$uboot_recovery_name" |
+  tee "$work/pzl8-uboot-recovery-list.txt"
+grep -Fq 'PZL8 dual-slot rootfs-only U-Boot recovery' \
+  "$work/pzl8-uboot-recovery-list.txt"
+grep -Fq 'Image 0 (script)' "$work/pzl8-uboot-recovery-list.txt"
+grep -Fq 'Image 1 (firmware)' "$work/pzl8-uboot-recovery-list.txt"
+
+dumpimage -T flat_dt -p 0 -o "$work/verify-uboot-recovery.scr" \
+  "$output/$uboot_recovery_name"
+dumpimage -T flat_dt -p 1 -o "$work/verify-uboot-recovery-ubi.bin" \
+  "$output/$uboot_recovery_name"
+cmp "$work/pzl8-uboot-recovery.scr" "$work/verify-uboot-recovery.scr"
+cmp "$output/$firmware_name" "$work/verify-uboot-recovery-ubi.bin"
+
+uboot_recovery_size="$(stat -c %s "$output/$uboot_recovery_name")"
+if [ "$uboot_recovery_size" -gt $((64 * 1024 * 1024)) ]; then
+  echo "U-Boot recovery FIT exceeds the 64 MiB load budget" >&2
+  exit 1
+fi
+
 python3 "$repo_root/scripts/extract_ubi.py" \
   "$output/$firmware_name" "$work/verify-volumes"
 cmp "$volumes/kernel.bin" "$work/verify-volumes/kernel.bin"
@@ -323,7 +409,7 @@ fi
 cp "$work/passwall-packages.txt" "$output/passwall-packages.txt"
 (
   cd "$output"
-  sha256sum "$firmware_name" > sha256sums
+  sha256sum "$firmware_name" "$uboot_recovery_name" > sha256sums
 )
 
 cat > "$output/build-manifest.txt" <<EOF
@@ -332,6 +418,15 @@ base_sha256=$BASE_SHA256
 output_file=$firmware_name
 output_sha256=$(sha256sum "$output/$firmware_name" | awk '{print $1}')
 output_size=$firmware_size
+uboot_recovery_file=$uboot_recovery_name
+uboot_recovery_sha256=$(sha256sum "$output/$uboot_recovery_name" | awk '{print $1}')
+uboot_recovery_size=$uboot_recovery_size
+uboot_recovery_format=fit-script-plus-ubi
+uboot_recovery_layout=dual-rootfs-only
+uboot_recovery_rootfs0_offset=0x00900000
+uboot_recovery_rootfs1_offset=0x04300000
+uboot_recovery_slot_size=0x03a00000
+uboot_recovery_protected_partitions=untouched
 kernel_size=$(stat -c %s "$volumes/kernel.bin")
 rootfs_size=$rootfs_size
 rootfs_lebs=$rootfs_lebs
