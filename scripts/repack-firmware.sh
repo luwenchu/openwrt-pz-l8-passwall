@@ -287,6 +287,8 @@ cat > "$work/pzl8-uboot-recovery.its" <<EOF
   #address-cells = <1>;
 
   images {
+    default = "script";
+
     script {
       description = "flash.scr";
       data = /incbin/("$work/pzl8-uboot-recovery.scr");
