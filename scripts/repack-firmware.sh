@@ -331,7 +331,7 @@ dtc -I dts -O dtb \
 python3 -c \
   'import pathlib, sys; assert pathlib.Path(sys.argv[1]).read_bytes()[:4] == b"\xd0\x0d\xfe\xed"' \
   "$output/$uboot_recovery_name"
-dumpimage -l "$output/$uboot_recovery_name" |
+dumpimage -T flat_dt -l "$output/$uboot_recovery_name" |
   tee "$work/pzl8-uboot-recovery-list.txt"
 grep -Fq 'PZL8 dual-slot rootfs-only U-Boot recovery' \
   "$work/pzl8-uboot-recovery-list.txt"
