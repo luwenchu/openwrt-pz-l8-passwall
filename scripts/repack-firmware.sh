@@ -346,18 +346,22 @@ test "$(fdtget "$output/$uboot_recovery_name" /images/script/hash@1 algo)" = \
 test "$(fdtget "$output/$uboot_recovery_name" /images/firmware/hash@1 algo)" = \
   "crc32"
 
-dumpimage -T flat_dt -p 0 -o "$work/verify-uboot-recovery.scr" \
-  "$output/$uboot_recovery_name"
-dumpimage -T flat_dt -p 1 -o "$work/verify-uboot-recovery-ubi.bin" \
-  "$output/$uboot_recovery_name"
-cmp "$work/pzl8-uboot-recovery.scr" "$work/verify-uboot-recovery.scr"
-cmp "$output/$firmware_name" "$work/verify-uboot-recovery-ubi.bin"
+rm -rf "$work/verify-uboot-recovery"
+python3 "$repo_root/scripts/extract_fit.py" \
+  "$output/$uboot_recovery_name" \
+  "$work/verify-uboot-recovery" |
+  tee "$work/verify-uboot-recovery.txt"
+test "$(find "$work/verify-uboot-recovery" -maxdepth 1 -type f | wc -l)" -eq 2
+cmp "$work/pzl8-uboot-recovery.scr" \
+  "$work/verify-uboot-recovery/script.bin"
+cmp "$output/$firmware_name" \
+  "$work/verify-uboot-recovery/firmware.bin"
 test "$script_crc32" = "$(python3 -c \
   'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
-  "$work/verify-uboot-recovery.scr")"
+  "$work/verify-uboot-recovery/script.bin")"
 test "$firmware_crc32" = "$(python3 -c \
   'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
-  "$work/verify-uboot-recovery-ubi.bin")"
+  "$work/verify-uboot-recovery/firmware.bin")"
 
 uboot_recovery_size="$(stat -c %s "$output/$uboot_recovery_name")"
 if [ "$uboot_recovery_size" -gt $((64 * 1024 * 1024)) ]; then
