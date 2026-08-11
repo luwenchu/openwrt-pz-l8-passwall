@@ -156,7 +156,6 @@ def main():
     parser.add_argument("--base-status", type=pathlib.Path, required=True)
     parser.add_argument("--root", type=pathlib.Path, required=True)
     parser.add_argument("--remove-package", action="append", default=[])
-    parser.add_argument("--remove-package-prefix", action="append", default=[])
     parser.add_argument("packages", nargs="*")
     args = parser.parse_args()
 
@@ -166,14 +165,6 @@ def main():
     status_path.write_bytes(args.base_status.read_bytes())
     for package in args.remove_package:
         remove_package(args.root, status_path, package)
-    for prefix in args.remove_package_prefix:
-        matches = sorted(
-            package for package in installed_from_status(status_path)
-            if package.startswith(prefix)
-        )
-        for package in matches:
-            print(f"remove prefix {prefix}\t{package}")
-            remove_package(args.root, status_path, package)
 
     package_files = {}
     controls = {}

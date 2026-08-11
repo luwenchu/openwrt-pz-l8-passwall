@@ -39,40 +39,7 @@ sudo python3 "$repo_root/scripts/install_ipks.py" \
   --remove-package luci-app-ksmbd \
   --remove-package luci-i18n-ksmbd-zh-cn \
   --remove-package ksmbd-server \
-  --remove-package luci-app-samba \
-  --remove-package luci-i18n-samba-zh-cn \
-  --remove-package samba36-server \
-  --remove-package luci-app-samba4 \
-  --remove-package luci-i18n-samba4-zh-cn \
-  --remove-package samba4-server \
-  --remove-package samba4-libs \
-  --remove-package luci-app-ddns \
-  --remove-package luci-i18n-ddns-zh-cn \
-  --remove-package ddns-scripts \
-  --remove-package ddns-scripts-services \
-  --remove-package luci-app-wol \
-  --remove-package luci-i18n-wol-zh-cn \
-  --remove-package etherwake \
-  --remove-package isc-dhcp-relay-ipv6 \
-  --remove-package quagga-watchquagga \
-  --remove-package quagga-vtysh \
-  --remove-package quagga-ripd \
-  --remove-package quagga-zebra \
-  --remove-package quagga-libzebra \
-  --remove-package quagga \
-  --remove-package luci-app-zerotier \
-  --remove-package luci-i18n-zerotier-zh-cn \
-  --remove-package zerotier \
-  --remove-package-prefix quagga \
-  --remove-package-prefix samba \
-  --remove-package-prefix luci-app-samba \
-  --remove-package-prefix luci-i18n-samba \
-  --remove-package-prefix ksmbd \
-  --remove-package-prefix luci-app-ksmbd \
-  --remove-package-prefix luci-i18n-ksmbd \
-  --remove-package-prefix ddns-scripts \
-  --remove-package-prefix zerotier \
-  swap-utils luci-app-passwall luci-i18n-passwall-zh-cn xray-core
+  luci-app-passwall luci-i18n-passwall-zh-cn xray-core
 
 cat > "$work/openwrt_release" <<'EOF'
 DISTRIB_ID='PZL8'
@@ -104,20 +71,7 @@ cat > "$work/99-pzl8-passwall-rootfs" <<'EOF'
 
 cp -f /rom/etc/openwrt_release /etc/openwrt_release
 uci -q set system.@system[0].hostname='PZL8'
-uci -q set system.@system[0].log_size='64'
 uci -q commit system
-
-mkdir -p /etc/sysctl.d
-cat >/etc/sysctl.d/90-pzl8-memory.conf <<'SYSCTL'
-net.netfilter.nf_conntrack_max=32768
-net.netfilter.nf_conntrack_generic_timeout=120
-net.netfilter.nf_conntrack_tcp_timeout_established=3600
-net.netfilter.nf_conntrack_tcp_timeout_time_wait=60
-net.netfilter.nf_conntrack_udp_timeout=60
-net.netfilter.nf_conntrack_udp_timeout_stream=180
-SYSCTL
-
-/etc/init.d/pzl8-memory-tuning enable >/dev/null 2>&1 || true
 
 uci -q set wireless.wifinet0.ssid='PZL8_2.4G_0'
 uci -q set wireless.wifinet1.ssid='PZL8_5G_1'
@@ -156,22 +110,6 @@ sudo install -D -m 0644 "$repo_root/scripts/xray-legacy-compat.lua" \
   "$rootfs/usr/share/passwall/xray_legacy_compat.lua"
 sudo install -D -m 0755 "$repo_root/scripts/pzl8-postboot.sh" \
   "$rootfs/usr/sbin/pzl8-postboot"
-sudo install -D -m 0755 "$repo_root/scripts/pzl8-memory-tuning.sh" \
-  "$rootfs/etc/init.d/pzl8-memory-tuning"
-sudo mkdir -p "$rootfs/etc/sysctl.d"
-sudo mkdir -p "$rootfs/etc/rc.d"
-cat >"$work/90-pzl8-memory.conf" <<'EOF'
-net.netfilter.nf_conntrack_max=32768
-net.netfilter.nf_conntrack_generic_timeout=120
-net.netfilter.nf_conntrack_tcp_timeout_established=3600
-net.netfilter.nf_conntrack_tcp_timeout_time_wait=60
-net.netfilter.nf_conntrack_udp_timeout=60
-net.netfilter.nf_conntrack_udp_timeout_stream=180
-EOF
-sudo install -m 0644 "$work/90-pzl8-memory.conf" \
-  "$rootfs/etc/sysctl.d/90-pzl8-memory.conf"
-sudo ln -sf ../init.d/pzl8-memory-tuning \
-  "$rootfs/etc/rc.d/S12pzl8-memory-tuning"
 if ! grep -Fq '/usr/sbin/pzl8-postboot' "$rootfs/etc/rc.local"; then
   awk '
     /^exit 0$/ && !added {
@@ -208,8 +146,6 @@ require_file "$rootfs/usr/share/passwall/nftables.sh"
 require_file "$rootfs/usr/lib/lua/luci/passwall/api.lua"
 require_file "$rootfs/usr/sbin/pzl8-postboot"
 require_file "$rootfs/etc/rc.local"
-require_file "$rootfs/etc/init.d/pzl8-memory-tuning"
-require_file "$rootfs/etc/sysctl.d/90-pzl8-memory.conf"
 
 grep -Fq 'grep -a -q "$board" /proc/device-tree/compatible' \
   "$rootfs/lib/upgrade/platform.sh"
@@ -240,13 +176,6 @@ grep -Fq '/etc/init.d/passwall start </dev/null' \
   "$rootfs/usr/sbin/pzl8-postboot"
 sh -n "$rootfs/usr/sbin/pzl8-postboot"
 sh -n "$rootfs/etc/rc.local"
-sh -n "$rootfs/etc/init.d/pzl8-memory-tuning"
-grep -Fq 'ZRAM_SIZE=$((96 * 1024 * 1024))' \
-  "$rootfs/etc/init.d/pzl8-memory-tuning"
-grep -Fq 'net.netfilter.nf_conntrack_max=32768' \
-  "$rootfs/etc/sysctl.d/90-pzl8-memory.conf"
-grep -Fq "system.@system[0].log_size='64'" \
-  "$rootfs/etc/uci-defaults/99-pzl8-passwall-rootfs"
 test "$(grep -Fc "xray_legacy_compat.lua" \
   "$rootfs/usr/share/passwall/app.sh")" -eq 1
 grep -Fq "if \$XRAY_BIN version 2>/dev/null | head -n1 | grep -q '^Xray 1\\.'; then" \
@@ -275,55 +204,10 @@ fi
 grep -Fq "counter drop" "$rootfs/usr/share/passwall/nftables.sh"
 sh -n "$rootfs/usr/share/passwall/nftables.sh"
 
-for removed_path in \
-  usr/bin/mosdns \
-  usr/bin/v2dat \
-  usr/sbin/dhcrelay \
-  usr/bin/zerotier-one \
-  usr/bin/ttyd \
-  usr/libexec/ksmbd.tools \
-  usr/bin/vtysh \
-  usr/sbin/zebra \
-  usr/lib/ddns/dynamic_dns_updater.sh \
-  usr/bin/etherwake \
-  usr/sbin/smbd; do
-  if [ -e "$rootfs/$removed_path" ]; then
-    echo "Web rootfs still contains removed file: $removed_path" >&2
-    exit 1
-  fi
-done
-if grep -Eq '^Package: (mosdns|quagga|zerotier|samba|ksmbd|ddns-scripts|luci-app-(mosdns|quagga|zerotier|samba|ksmbd|ddns|wol)|luci-i18n-(mosdns|quagga|zerotier|samba|ksmbd|ddns|wol))' \
-  "$rootfs/usr/lib/opkg/status"; then
-  echo "Web rootfs package status still contains a removed service" >&2
+if [ -e "$rootfs/usr/bin/mosdns" ] || [ -e "$rootfs/usr/bin/v2dat" ]; then
+  echo "MosDNS executables were not removed before SquashFS packing" >&2
   exit 1
 fi
-
-zram_driver_source=
-zram_module_path="$(find "$rootfs/lib/modules" -type f -name 'zram.ko*' -print -quit 2>/dev/null)"
-if [ -n "$zram_module_path" ]; then
-  zram_driver_source=module
-elif grep -RqE '(^|/)zram\.ko([[:space:]]|$)' \
-  "$rootfs/lib/modules"/*/modules.builtin* 2>/dev/null; then
-  zram_driver_source=builtin
-elif grep -Eq '^Package: kmod-zram$' "$rootfs/usr/lib/opkg/status"; then
-  zram_driver_source=package
-else
-  echo "The preserved base kernel has no verifiable ZRAM driver" >&2
-  exit 1
-fi
-for swap_tool in mkswap swapon swapoff; do
-  swap_tool_found=0
-  for swap_tool_dir in bin sbin usr/bin usr/sbin; do
-    if sudo test -e "$rootfs/$swap_tool_dir/$swap_tool"; then
-      swap_tool_found=1
-      break
-    fi
-  done
-  if [ "$swap_tool_found" -ne 1 ]; then
-    echo "Required ZRAM swap tool is missing: $swap_tool" >&2
-    exit 1
-  fi
-done
 
 if ! grep -Eq "option enabled ['\"]0['\"]" \
   "$rootfs/usr/share/passwall/0_default_config"; then
@@ -343,6 +227,20 @@ if ! grep -Eq 'ELF 32-bit.*ARM' "$work/xray-file.txt"; then
 fi
 
 sudo cp -a "$rootfs" "$recovery_rootfs"
+sudo python3 "$repo_root/scripts/install_ipks.py" \
+  --ipk-root "$package_cache" \
+  --base-status "$recovery_rootfs/usr/lib/opkg/status" \
+  --root "$recovery_rootfs" \
+  --remove-package isc-dhcp-relay-ipv6 \
+  --remove-package quagga-watchquagga \
+  --remove-package quagga-vtysh \
+  --remove-package quagga-ripd \
+  --remove-package quagga-zebra \
+  --remove-package quagga-libzebra \
+  --remove-package quagga \
+  --remove-package luci-app-zerotier \
+  --remove-package luci-i18n-zerotier-zh-cn \
+  --remove-package zerotier
 
 grep -Fq 'local old_on_after_commit = map.on_after_commit' \
   "$recovery_rootfs/usr/lib/lua/luci/passwall/api.lua"
@@ -362,10 +260,7 @@ for recovery_removed_path in \
   usr/bin/ttyd \
   usr/libexec/ksmbd.tools \
   usr/bin/vtysh \
-  usr/sbin/zebra \
-  usr/lib/ddns/dynamic_dns_updater.sh \
-  usr/bin/etherwake \
-  usr/sbin/smbd; do
+  usr/sbin/zebra; do
   if [ -e "$recovery_rootfs/$recovery_removed_path" ]; then
     echo "U-Boot recovery rootfs still contains removed file: $recovery_removed_path" >&2
     exit 1
@@ -749,14 +644,6 @@ grep -Fq '/etc/init.d/passwall start </dev/null' \
 grep -Fq '/usr/sbin/pzl8-postboot </dev/null' "$work/verify-rc.local"
 sh -n "$work/verify-pzl8-postboot.sh"
 sh -n "$work/verify-rc.local"
-unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
-  etc/init.d/pzl8-memory-tuning >"$work/verify-pzl8-memory-tuning.sh"
-unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
-  etc/sysctl.d/90-pzl8-memory.conf >"$work/verify-pzl8-memory.conf"
-cmp "$repo_root/scripts/pzl8-memory-tuning.sh" \
-  "$work/verify-pzl8-memory-tuning.sh"
-cmp "$work/90-pzl8-memory.conf" "$work/verify-pzl8-memory.conf"
-sh -n "$work/verify-pzl8-memory-tuning.sh"
 cmp "$repo_root/scripts/pzl8-platform.sh" "$work/verify-platform.sh"
 cmp "$work/openwrt_release" "$work/verify-openwrt-release"
 cmp "$work/banner" "$work/verify-banner"
@@ -769,18 +656,30 @@ if grep -Fq 'nand_do_upgrade "$1"' "$work/verify-platform.sh"; then
 fi
 sh -n "$work/verify-platform.sh"
 
-for factory_removed_path in \
-  usr/bin/mosdns \
-  usr/bin/v2dat \
+if unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  usr/bin/mosdns >/dev/null 2>&1; then
+  echo "MosDNS was not removed from the repacked rootfs" >&2
+  exit 1
+fi
+if unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+  usr/bin/v2dat >/dev/null 2>&1; then
+  echo "MosDNS v2dat helper was not removed from the repacked rootfs" >&2
+  exit 1
+fi
+for restored_path in \
   usr/sbin/dhcrelay \
   usr/bin/zerotier-one \
-  usr/bin/ttyd \
-  usr/libexec/ksmbd.tools \
   usr/bin/vtysh \
-  usr/sbin/zebra \
-  usr/lib/ddns/dynamic_dns_updater.sh \
-  usr/bin/etherwake \
-  usr/sbin/smbd; do
+  usr/sbin/zebra; do
+  if ! unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
+    "$restored_path" >/dev/null 2>&1; then
+    echo "Web upgrade image is missing restored package file: $restored_path" >&2
+    exit 1
+  fi
+done
+for factory_removed_path in \
+  usr/bin/ttyd \
+  usr/libexec/ksmbd.tools; do
   if unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
     "$factory_removed_path" >/dev/null 2>&1; then
     echo "Web upgrade image still contains removed file: $factory_removed_path" >&2
@@ -793,10 +692,7 @@ for recovery_removed_path in \
   usr/bin/ttyd \
   usr/libexec/ksmbd.tools \
   usr/bin/vtysh \
-  usr/sbin/zebra \
-  usr/lib/ddns/dynamic_dns_updater.sh \
-  usr/bin/etherwake \
-  usr/sbin/smbd; do
+  usr/sbin/zebra; do
   if unsquashfs -cat "$work/verify-recovery-volumes/rootfs.squashfs" \
     "$recovery_removed_path" >/dev/null 2>&1; then
     echo "U-Boot recovery contains removed file: $recovery_removed_path" >&2
@@ -851,18 +747,9 @@ architecture=arm_cortex-a7_neon-vfpv4
 kernel_preserved=yes
 rootfs_repacked=yes
 passwall_location=squashfs
-removed_packages=mosdns,luci-app-mosdns,luci-i18n-mosdns-zh-cn,v2dat,luci-app-ttyd,luci-i18n-ttyd-zh-cn,ttyd,luci-app-ksmbd,luci-i18n-ksmbd-zh-cn,ksmbd-server,luci-app-samba,luci-i18n-samba-zh-cn,samba36-server,luci-app-samba4,luci-i18n-samba4-zh-cn,samba4-server,samba4-libs,luci-app-ddns,luci-i18n-ddns-zh-cn,ddns-scripts,ddns-scripts-services,luci-app-wol,luci-i18n-wol-zh-cn,etherwake,isc-dhcp-relay-ipv6,quagga-watchquagga,quagga-vtysh,quagga-ripd,quagga-zebra,quagga-libzebra,quagga,luci-app-zerotier,luci-i18n-zerotier-zh-cn,zerotier
-restored_packages=none
-uboot_recovery_removed_packages=same-as-web
-zram_size_mib=96
-zram_priority=100
-zram_nand_swap=no
-zram_driver_source=$zram_driver_source
-system_log_size_kib=64
-nf_conntrack_max=32768
-nf_conntrack_timeouts=tcp-established-3600,udp-60,udp-stream-180,generic-120
-dtb_preserved=yes
-nss_wifi_reserved_memory=preserved
+removed_packages=mosdns,luci-app-mosdns,luci-i18n-mosdns-zh-cn,v2dat,luci-app-ttyd,luci-i18n-ttyd-zh-cn,ttyd,luci-app-ksmbd,luci-i18n-ksmbd-zh-cn,ksmbd-server
+restored_packages=isc-dhcp-relay-ipv6,quagga-watchquagga,quagga-vtysh,quagga-ripd,quagga-zebra,quagga-libzebra,quagga,luci-app-zerotier,luci-i18n-zerotier-zh-cn,zerotier
+uboot_recovery_removed_packages=mosdns,luci-app-mosdns,luci-i18n-mosdns-zh-cn,v2dat,isc-dhcp-relay-ipv6,quagga-watchquagga,quagga-vtysh,quagga-ripd,quagga-zebra,quagga-libzebra,quagga,luci-app-zerotier,luci-i18n-zerotier-zh-cn,zerotier,luci-app-ttyd,luci-i18n-ttyd-zh-cn,ttyd,luci-app-ksmbd,luci-i18n-ksmbd-zh-cn,ksmbd-server
 passwall_mode=nftables
 passwall_core=xray
 passwall_xray_1x_compat=yes

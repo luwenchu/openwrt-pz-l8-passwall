@@ -8,15 +8,10 @@ PassWall。
 
 - 保留原固件 kernel、DTB 和硬件驱动，不混入其他内核模块。
 - 将 PassWall/Xray 写入只读 SquashFS，保留配置刷机也不会覆盖插件。
-- Web 与 U-Boot 镜像统一移除 MosDNS、专用 `v2dat`、Quagga、ZeroTier、
-  Samba/ksmbd、动态 DNS、网络唤醒、IPv6 DHCP Relay 和 ttyd；保留 Xray
-  使用的 GeoIP/GeoSite 数据。
-- 启用 96 MiB ZRAM 压缩交换，交换设备仅位于内存，不在 NAND 上建立 swap。
-  `mkswap` 由同一 OpenWrt 23.05 SDK 构建的 `swap-utils` 提供。
-- 将系统日志环形缓冲限制为 64 KiB，连接跟踪表限制为 32768 项，并缩短长期
-  空闲连接的回收时间，降低 256 MiB 机型的常驻内存压力。
-- 保留原 kernel、DTB、QSDK WiFi、NSS 和全部 reserved-memory 布局，不通过
-  缩减无线或 NSS 保留内存换取 Linux 可用内存。
+- 移除 MosDNS、其 LuCI 文件及专用 `v2dat` 工具，为 PassWall/Xray 腾出
+  SquashFS 空间；保留 Xray 使用的 GeoIP/GeoSite 数据。
+- LuCI/Web 升级镜像保留基底固件原有的 IPv6 DHCP Relay、Quagga 和
+  ZeroTier，不因 U-Boot Web 的 32 MiB 限制删减这些功能。
 - PassWall 只启用 nftables 透明代理。
 - 只预置 Xray 核心，不加入 Sing-Box、SSR、Hysteria、NaiveProxy 等额外核心。
 - 为内置 Xray 1.8.24 加入兼容层：启动时仅对 Xray 1.x 将新版 PassWall 生成的
@@ -59,18 +54,18 @@ FIT 根描述使用官方 U-Boot Web 识别的 `Flashing nand 800 20000`，其�
 
 设备自带 U-Boot Web 的 HTTP 上传程序有 32 MiB 硬限制。recovery FIT 因此
 使用 U-Boot 支持的 gzip 载荷，在 RAM 地址 `0x48000000` 解压后再写入两个
-rootfs 槽。Web 与 U-Boot 镜像使用相同的精简软件包清单，移除不影响中文、
-Argon、PassWall/Xray、QSDK 无线或 NSS 的 MosDNS、Quagga、ZeroTier、
-Samba/ksmbd、动态 DNS、网络唤醒、IPv6 DHCP Relay 和 ttyd。由于这版
-U-Boot 的单次 gzip `imxtract` 解压上限为
+rootfs 槽。为保留足够的上传余量，测试固件移除了不影响中文、Argon、
+PassWall/Xray、QSDK 无线或 NSS 的 IPv6 DHCP Relay、Quagga、ZeroTier 和
+ttyd Web 终端及 ksmbd。由于这版 U-Boot 的单次 gzip `imxtract` 解压上限为
 8 MiB，recovery 会把 UBI 分为多个不超过 7 MiB 的节点，依次解压到连续 RAM
 后再整体写入。
 
 U-Boot recovery 固件从本次构建的同一份 PassWall 修复文件生成，因此会同步包含
 VLESS 首次应用兼容、nftables 兼容以及首次启用后自动设置开机自启并立即启动的
 修复。
-两类镜像都会包含相同的 96 MiB ZRAM、日志缓冲和连接跟踪优化；这些改动不触碰
-PassWall 规则生成逻辑、QSDK 无线、NSS 或 reserved-memory。
+为满足 U-Boot Web 的 32 MiB 限制，recovery 仍单独移除 IPv6 DHCP Relay、
+Quagga、ZeroTier、ttyd 和 ksmbd；这些删减不影响 PassWall、Xray、中文、Argon、
+QSDK 无线或 NSS。
 
 通过 TFTP 加载后可执行：
 

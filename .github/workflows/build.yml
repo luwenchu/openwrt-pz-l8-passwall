@@ -47,13 +47,13 @@ jobs:
             pzl8-packages-
 
       - name: Build PassWall packages
-        if: steps.package-cache.outputs.cache-hit != 'true'
+        if: steps.package-cache.outputs.cache-matched-key == ''
         run: |
           chmod +x scripts/*.sh
           scripts/build-passwall.sh
 
       - name: Save compiled packages
-        if: steps.package-cache.outputs.cache-hit != 'true'
+        if: steps.package-cache.outputs.cache-matched-key == ''
         uses: actions/cache/save@v4
         with:
           path: work/package-cache
@@ -82,9 +82,8 @@ jobs:
           First-time PassWall enablement commits the selected node before enabling autostart and starting the service.
           Saving PassWall settings while enabled reloads the running service so node changes take effect immediately.
           PZL8 SSIDs are restored after late QSDK wireless initialization.
-          MosDNS, Quagga, ZeroTier, SMB, DDNS, Wake-on-LAN and IPv6 DHCP Relay are removed.
-          A 96 MiB ZRAM service, 64 KiB log buffer and a 32768-entry conntrack limit are configured.
-          Kernel, DTB, QSDK WiFi, NSS and all reserved-memory regions remain unchanged.
+          MosDNS and its dedicated v2dat helper are removed to provide rootfs capacity.
+          The Web upgrade image retains IPv6 DHCP Relay, Quagga and ZeroTier.
           CMCC PZL8 Web sysupgrade writes the inactive rootfs slot and persists the bootconfig switch.
           The rootfs-only U-Boot recovery FIT is rebuilt from the same PassWall-patched rootfs.
           Physical boot and throughput still require router testing."
