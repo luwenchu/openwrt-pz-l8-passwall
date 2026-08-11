@@ -9,36 +9,16 @@ work="$repo_root/work"
 volumes="$work/volumes"
 rootfs="$work/rootfs"
 ubi_root="$work/rootfs-data"
+recovery_rootfs="$work/rootfs-recovery"
 output="$repo_root/output"
 package_cache="$work/package-cache"
 firmware_name="PZL8-2026-08-11-passwall-nft-xray-rootfs-factory.bin"
 uboot_recovery_name="PZL8-2026-08-11-passwall-nft-xray-uboot-recovery.bin"
-pinned_uboot_recovery="$work/downloads/$UBOOT_RECOVERY_FILE"
 
 echo "$BASE_SHA256  $base" | sha256sum -c -
 test -d "$package_cache"
-rm -rf "$volumes" "$rootfs" "$ubi_root" "$output"
-mkdir -p "$volumes" "$ubi_root/upper" "$ubi_root/work" "$output" \
-  "$work/downloads"
-
-if ! echo "$UBOOT_RECOVERY_SHA256  $pinned_uboot_recovery" |
-  sha256sum -c - >/dev/null 2>&1; then
-  rm -f "$pinned_uboot_recovery" "$pinned_uboot_recovery.part"
-  if command -v gh >/dev/null 2>&1 && [ -n "${GH_TOKEN:-}" ]; then
-    gh release download "$UBOOT_RECOVERY_TAG" \
-      --repo "$UBOOT_RECOVERY_REPO" \
-      --pattern "$UBOOT_RECOVERY_FILE" \
-      --dir "$work/downloads" \
-      --clobber
-  else
-    curl -fL --retry 3 --retry-delay 2 \
-      -o "$pinned_uboot_recovery.part" "$UBOOT_RECOVERY_URL"
-    mv "$pinned_uboot_recovery.part" "$pinned_uboot_recovery"
-  fi
-fi
-echo "$UBOOT_RECOVERY_SHA256  $pinned_uboot_recovery" | sha256sum -c -
-test "$(stat -c %s "$pinned_uboot_recovery")" -eq "$UBOOT_RECOVERY_SIZE"
-test "$UBOOT_RECOVERY_FILE" = "$uboot_recovery_name"
+rm -rf "$volumes" "$rootfs" "$recovery_rootfs" "$ubi_root" "$output"
+mkdir -p "$volumes" "$ubi_root/upper" "$ubi_root/work" "$output"
 
 python3 "$repo_root/scripts/extract_ubi.py" "$base" "$volumes"
 test "$(stat -c %s "$volumes/kernel.bin")" -eq 3921808
@@ -240,6 +220,41 @@ if ! grep -Eq 'ELF 32-bit.*ARM' "$work/xray-file.txt"; then
   exit 1
 fi
 
+sudo cp -a "$rootfs" "$recovery_rootfs"
+sudo python3 "$repo_root/scripts/install_ipks.py" \
+  --ipk-root "$package_cache" \
+  --base-status "$recovery_rootfs/usr/lib/opkg/status" \
+  --root "$recovery_rootfs" \
+  --remove-package isc-dhcp-relay-ipv6 \
+  --remove-package quagga-watchquagga \
+  --remove-package quagga-vtysh \
+  --remove-package quagga-ripd \
+  --remove-package quagga-zebra \
+  --remove-package quagga-libzebra \
+  --remove-package quagga \
+  --remove-package luci-app-zerotier \
+  --remove-package luci-i18n-zerotier-zh-cn \
+  --remove-package zerotier
+
+grep -Fq 'local old_on_after_commit = map.on_after_commit' \
+  "$recovery_rootfs/usr/lib/lua/luci/passwall/api.lua"
+grep -Fq 'if map.config ~= appname then return end' \
+  "$recovery_rootfs/usr/lib/lua/luci/passwall/api.lua"
+grep -Fq 'sys.call("/etc/init.d/passwall " .. action' \
+  "$recovery_rootfs/usr/lib/lua/luci/passwall/api.lua"
+for recovery_removed_path in \
+  usr/sbin/dhcrelay \
+  usr/bin/zerotier-one \
+  usr/bin/ttyd \
+  usr/libexec/ksmbd.tools \
+  usr/bin/vtysh \
+  usr/sbin/zebra; do
+  if [ -e "$recovery_rootfs/$recovery_removed_path" ]; then
+    echo "U-Boot recovery rootfs still contains removed file: $recovery_removed_path" >&2
+    exit 1
+  fi
+done
+
 sudo mksquashfs "$rootfs" "$work/rootfs-passwall.squashfs" \
   -comp xz -Xbcj arm -b 256K -no-xattrs -noappend >/dev/null
 rootfs_size="$(stat -c %s "$work/rootfs-passwall.squashfs")"
@@ -247,6 +262,16 @@ rootfs_lebs=$(((rootfs_size + 126975) / 126976))
 rootfs_vol_size=$((rootfs_lebs * 126976))
 if [ "$rootfs_lebs" -gt 246 ]; then
   echo "PassWall SquashFS exceeds the 246 LEB rootfs budget: $rootfs_size" >&2
+  exit 1
+fi
+
+sudo mksquashfs "$recovery_rootfs" "$work/rootfs-recovery.squashfs" \
+  -comp xz -Xbcj arm -b 256K -no-xattrs -noappend >/dev/null
+recovery_rootfs_size="$(stat -c %s "$work/rootfs-recovery.squashfs")"
+recovery_rootfs_lebs=$(((recovery_rootfs_size + 126975) / 126976))
+recovery_rootfs_vol_size=$((recovery_rootfs_lebs * 126976))
+if [ "$recovery_rootfs_lebs" -gt 246 ]; then
+  echo "U-Boot recovery SquashFS exceeds the 246 LEB rootfs budget: $recovery_rootfs_size" >&2
   exit 1
 fi
 
@@ -303,12 +328,181 @@ if [ "$firmware_size" -gt $((58 * 1024 * 1024)) ]; then
   exit 1
 fi
 
-cp "$pinned_uboot_recovery" "$output/$uboot_recovery_name"
-echo "$UBOOT_RECOVERY_SHA256  $output/$uboot_recovery_name" | sha256sum -c -
+cat > "$work/recovery-ubinize.cfg" <<EOF
+[kernel]
+mode=ubi
+image=$volumes/kernel.bin
+vol_id=0
+vol_type=dynamic
+vol_name=kernel
+vol_size=3936256
+
+[rootfs]
+mode=ubi
+image=$work/rootfs-recovery.squashfs
+vol_id=1
+vol_type=dynamic
+vol_name=rootfs
+vol_size=$recovery_rootfs_vol_size
+
+[rootfs_data]
+mode=ubi
+image=$work/rootfs_data.ubifs
+vol_id=2
+vol_type=dynamic
+vol_name=rootfs_data
+vol_size=$((rootfs_data_lebs * 126976))
+vol_flags=autoresize
+EOF
+
+recovery_firmware="$work/pzl8-uboot-recovery-ubi.bin"
+ubinize -o "$recovery_firmware" -m 2048 -p 128KiB -s 2048 \
+  "$work/recovery-ubinize.cfg"
+recovery_firmware_size="$(stat -c %s "$recovery_firmware")"
+if [ "$recovery_firmware_size" -gt $((58 * 1024 * 1024)) ]; then
+  echo "U-Boot recovery UBI exceeds the 58 MiB rootfs MTD partition" >&2
+  exit 1
+fi
+
+recovery_firmware_size_hex="$(printf '0x%08x' "$recovery_firmware_size")"
+recovery_chunk_size=$((7 * 1024 * 1024))
+recovery_chunk_dir="$work/pzl8-uboot-recovery-chunks"
+rm -rf "$recovery_chunk_dir"
+mkdir -p "$recovery_chunk_dir"
+split -b "$recovery_chunk_size" -d -a 2 \
+  "$recovery_firmware" "$recovery_chunk_dir/firmware-"
+
+recovery_extract_commands="$work/pzl8-uboot-extract-commands"
+recovery_its_nodes="$work/pzl8-uboot-firmware-nodes.its"
+: > "$recovery_extract_commands"
+: > "$recovery_its_nodes"
+recovery_chunk_count=0
+recovery_payload_size=0
+recovery_offset=0
+
+for recovery_chunk in "$recovery_chunk_dir"/firmware-[0-9][0-9]; do
+  recovery_suffix="${recovery_chunk##*-}"
+  recovery_node="firmware-$recovery_suffix"
+  recovery_chunk_gzip="$recovery_chunk.gz"
+  recovery_chunk_uncompressed_size="$(stat -c %s "$recovery_chunk")"
+  if [ "$recovery_chunk_uncompressed_size" -gt $((8 * 1024 * 1024)) ]; then
+    echo "U-Boot recovery chunk exceeds the 8 MiB imxtract limit" >&2
+    exit 1
+  fi
+
+  gzip -9 -n -c "$recovery_chunk" > "$recovery_chunk_gzip"
+  gzip -t "$recovery_chunk_gzip"
+  recovery_chunk_payload_size="$(stat -c %s "$recovery_chunk_gzip")"
+  recovery_chunk_crc32="$(python3 -c \
+    'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
+    "$recovery_chunk_gzip")"
+  recovery_chunk_address="$(printf '0x%08x' $((0x48000000 + recovery_offset)))"
+
+  cat >> "$recovery_extract_commands" <<EOF
+echo "Extracting PZL8 UBI chunk $recovery_suffix"
+imxtract "\$fitaddr" "$recovery_node" "$recovery_chunk_address" || exit 1
+EOF
+
+  cat >> "$recovery_its_nodes" <<EOF
+    $recovery_node {
+      description = "PZL8 PassWall UBI chunk $recovery_suffix";
+      data = /incbin/("$recovery_chunk_gzip");
+      type = "firmware";
+      arch = "arm";
+      compression = "gzip";
+      hash@1 {
+        value = <0x$recovery_chunk_crc32>;
+        algo = "crc32";
+      };
+    };
+EOF
+
+  recovery_chunk_count=$((recovery_chunk_count + 1))
+  recovery_payload_size=$((recovery_payload_size + recovery_chunk_payload_size))
+  recovery_offset=$((recovery_offset + recovery_chunk_uncompressed_size))
+done
+
+test "$recovery_chunk_count" -gt 1
+test "$recovery_offset" -eq "$recovery_firmware_size"
+
+sed "s/@FIRMWARE_SIZE_HEX@/$recovery_firmware_size_hex/g" \
+  "$repo_root/scripts/pzl8-uboot-recovery.scr.in" \
+  > "$work/pzl8-uboot-recovery.scr.template"
+awk -v commands="$recovery_extract_commands" '
+  $0 == "@FIRMWARE_EXTRACT_COMMANDS@" {
+    while ((getline line < commands) > 0)
+      print line
+    close(commands)
+    next
+  }
+  { print }
+' "$work/pzl8-uboot-recovery.scr.template" \
+  > "$work/pzl8-uboot-recovery.scr"
+
+fit_timestamp="${SOURCE_DATE_EPOCH:-$(git -C "$repo_root" log -1 --format=%ct)}"
+script_crc32="$(python3 -c \
+  'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
+  "$work/pzl8-uboot-recovery.scr")"
+
+test "$(grep -c '^nand erase ' "$work/pzl8-uboot-recovery.scr")" -eq 2
+test "$(grep -c '^nand write ' "$work/pzl8-uboot-recovery.scr")" -eq 2
+test "$(grep -c '^imxtract ' "$work/pzl8-uboot-recovery.scr")" \
+  -eq "$recovery_chunk_count"
+grep -Fq "nand erase 0x00900000 0x03a00000" \
+  "$work/pzl8-uboot-recovery.scr"
+grep -Fq "nand erase 0x04300000 0x03a00000" \
+  "$work/pzl8-uboot-recovery.scr"
+grep -Fq "nand write \"\$fileaddr\" 0x00900000 $recovery_firmware_size_hex" \
+  "$work/pzl8-uboot-recovery.scr"
+grep -Fq "nand write \"\$fileaddr\" 0x04300000 $recovery_firmware_size_hex" \
+  "$work/pzl8-uboot-recovery.scr"
+grep -Fq 'setenv recovery_addr 0x48000000' \
+  "$work/pzl8-uboot-recovery.scr"
+grep -Fq 'imxtract "$fitaddr" "firmware-00" "0x48000000"' \
+  "$work/pzl8-uboot-recovery.scr"
+if grep -Eq \
+  'SBL1|MIBIB|BOOTCONFIG|QSEE|DEVCFG|CDT|APPSBL|ART|saveenv' \
+  "$work/pzl8-uboot-recovery.scr"; then
+  echo "U-Boot recovery script references protected partitions" >&2
+  exit 1
+fi
+
+cat > "$work/pzl8-uboot-recovery.its" <<EOF
+/dts-v1/;
+
+/ {
+  timestamp = <$fit_timestamp>;
+  description = "Flashing nand 800 20000";
+
+  images {
+    script {
+      description = "flash.scr";
+      data = /incbin/("$work/pzl8-uboot-recovery.scr");
+      type = "script";
+      arch = "arm";
+      compression = "none";
+      hash@1 {
+        value = <0x$script_crc32>;
+        algo = "crc32";
+      };
+    };
+
+EOF
+cat "$recovery_its_nodes" >> "$work/pzl8-uboot-recovery.its"
+cat >> "$work/pzl8-uboot-recovery.its" <<EOF
+  };
+};
+EOF
+
+dtc -I dts -O dtb \
+  -o "$output/$uboot_recovery_name" \
+  "$work/pzl8-uboot-recovery.its"
+python3 -c \
+  'import pathlib, sys; assert pathlib.Path(sys.argv[1]).read_bytes()[:4] == b"\xd0\x0d\xfe\xed"' \
+  "$output/$uboot_recovery_name"
 uboot_recovery_size="$(stat -c %s "$output/$uboot_recovery_name")"
-test "$uboot_recovery_size" -eq "$UBOOT_RECOVERY_SIZE"
 if [ "$uboot_recovery_size" -ge $((32 * 1024 * 1024)) ]; then
-  echo "Pinned U-Boot Web recovery image exceeds the 32 MiB HTTP limit" >&2
+  echo "U-Boot Web recovery image exceeds the 32 MiB HTTP limit" >&2
   exit 1
 fi
 
@@ -320,7 +514,8 @@ test "$(fdtget "$output/$uboot_recovery_name" /images/script type)" = \
   "script"
 test "$(fdtget "$output/$uboot_recovery_name" /images/script/hash@1 algo)" = \
   "crc32"
-for recovery_suffix in 00 01 02 03 04; do
+for recovery_chunk in "$recovery_chunk_dir"/firmware-[0-9][0-9]; do
+  recovery_suffix="${recovery_chunk##*-}"
   recovery_node="firmware-$recovery_suffix"
   test "$(fdtget "$output/$uboot_recovery_name" \
     "/images/$recovery_node" type)" = "firmware"
@@ -335,49 +530,23 @@ python3 "$repo_root/scripts/extract_fit.py" \
   "$output/$uboot_recovery_name" \
   "$work/verify-uboot-recovery" |
   tee "$work/verify-uboot-recovery.txt"
-recovery_chunk_count="$(find "$work/verify-uboot-recovery" \
-  -maxdepth 1 -type f -name 'firmware-*.bin' | wc -l)"
-test "$recovery_chunk_count" -eq 5
 test "$(find "$work/verify-uboot-recovery" -maxdepth 1 -type f | wc -l)" \
   -eq $((recovery_chunk_count + 1))
-recovery_payload_size="$(awk \
-  '$1 ~ /^firmware-/ { total += $2 } END { print total + 0 }' \
-  "$work/verify-uboot-recovery.txt")"
-recovery_uncompressed_size="$(awk \
-  '$1 ~ /^firmware-/ { total += $3 } END { print total + 0 }' \
-  "$work/verify-uboot-recovery.txt")"
-recovery_chunk_size="$(awk \
-  '$1 ~ /^firmware-/ && $3 > maximum { maximum = $3 } END { print maximum + 0 }' \
-  "$work/verify-uboot-recovery.txt")"
-test "$recovery_payload_size" -eq "$UBOOT_RECOVERY_PAYLOAD_COMPRESSED_SIZE"
-test "$recovery_uncompressed_size" -eq "$UBOOT_RECOVERY_PAYLOAD_SIZE"
-test "$recovery_chunk_size" -eq $((7 * 1024 * 1024))
+cmp "$work/pzl8-uboot-recovery.scr" \
+  "$work/verify-uboot-recovery/script.bin"
 cat "$work/verify-uboot-recovery"/firmware-*.bin \
   > "$work/verify-uboot-recovery/firmware.bin"
-echo "$UBOOT_RECOVERY_PAYLOAD_SHA256  $work/verify-uboot-recovery/firmware.bin" |
-  sha256sum -c -
-test "$(stat -c %s "$work/verify-uboot-recovery/firmware.bin")" \
-  -eq "$UBOOT_RECOVERY_PAYLOAD_SIZE"
-test "$(grep -c '^nand erase ' \
-  "$work/verify-uboot-recovery/script.bin")" -eq 2
-test "$(grep -c '^nand write ' \
-  "$work/verify-uboot-recovery/script.bin")" -eq 2
-test "$(grep -c '^imxtract ' \
-  "$work/verify-uboot-recovery/script.bin")" -eq "$recovery_chunk_count"
-grep -Fq "nand erase 0x00900000 0x03a00000" \
-  "$work/verify-uboot-recovery/script.bin"
-grep -Fq "nand erase 0x04300000 0x03a00000" \
-  "$work/verify-uboot-recovery/script.bin"
-grep -Fq 'setenv recovery_addr 0x48000000' \
-  "$work/verify-uboot-recovery/script.bin"
-grep -Fq 'imxtract "$fitaddr" "firmware-00" "0x48000000"' \
-  "$work/verify-uboot-recovery/script.bin"
-if grep -Eq \
-  'SBL1|MIBIB|BOOTCONFIG|QSEE|DEVCFG|CDT|APPSBL|ART|saveenv' \
-  "$work/verify-uboot-recovery/script.bin"; then
-  echo "Pinned U-Boot recovery script references protected partitions" >&2
-  exit 1
-fi
+cmp "$recovery_firmware" "$work/verify-uboot-recovery/firmware.bin"
+recovery_uncompressed_size="$(stat -c %s \
+  "$work/verify-uboot-recovery/firmware.bin")"
+recovery_payload_sha256="$(sha256sum \
+  "$work/verify-uboot-recovery/firmware.bin" | awk '{print $1}')"
+test "$recovery_uncompressed_size" -eq "$recovery_firmware_size"
+test "$recovery_chunk_size" -eq $((7 * 1024 * 1024))
+test "$script_crc32" = "$(python3 -c \
+  'import pathlib, sys, zlib; print(f"{zlib.crc32(pathlib.Path(sys.argv[1]).read_bytes()) & 0xffffffff:08x}")' \
+  "$work/verify-uboot-recovery/script.bin")"
+
 rm -rf "$work/verify-recovery-volumes"
 python3 "$repo_root/scripts/extract_ubi.py" \
   "$work/verify-uboot-recovery/firmware.bin" \
@@ -405,6 +574,9 @@ unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   usr/share/passwall/nftables.sh > "$work/verify-passwall-nftables.sh"
 unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   usr/lib/lua/luci/passwall/api.lua > "$work/verify-passwall-api.lua"
+unsquashfs -cat "$work/verify-recovery-volumes/rootfs.squashfs" \
+  usr/lib/lua/luci/passwall/api.lua > "$work/verify-recovery-passwall-api.lua"
+cmp "$work/verify-passwall-api.lua" "$work/verify-recovery-passwall-api.lua"
 unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
   usr/sbin/pzl8-postboot > "$work/verify-pzl8-postboot.sh"
 unsquashfs -cat "$work/verify-volumes/rootfs.squashfs" \
@@ -427,6 +599,12 @@ grep -Fq 'if map.config ~= appname then return end' \
   "$work/verify-passwall-api.lua"
 grep -Fq 'sys.call("/etc/init.d/passwall " .. action' \
   "$work/verify-passwall-api.lua"
+grep -Fq 'local old_on_after_commit = map.on_after_commit' \
+  "$work/verify-recovery-passwall-api.lua"
+grep -Fq 'if map.config ~= appname then return end' \
+  "$work/verify-recovery-passwall-api.lua"
+grep -Fq 'sys.call("/etc/init.d/passwall " .. action' \
+  "$work/verify-recovery-passwall-api.lua"
 sh -n "$work/verify-passwall-app.sh"
 cmp "$repo_root/scripts/xray-legacy-compat.lua" \
   "$work/verify-xray-legacy-compat.lua"
@@ -493,7 +671,7 @@ for recovery_removed_path in \
   usr/sbin/zebra; do
   if unsquashfs -cat "$work/verify-recovery-volumes/rootfs.squashfs" \
     "$recovery_removed_path" >/dev/null 2>&1; then
-    echo "Pinned U-Boot recovery unexpectedly changed: $recovery_removed_path" >&2
+    echo "U-Boot recovery contains removed file: $recovery_removed_path" >&2
     exit 1
   fi
 done
@@ -514,14 +692,16 @@ uboot_recovery_file=$uboot_recovery_name
 uboot_recovery_sha256=$(sha256sum "$output/$uboot_recovery_name" | awk '{print $1}')
 uboot_recovery_size=$uboot_recovery_size
 uboot_recovery_format=fit-script-plus-ubi
-uboot_recovery_builder=pinned-release-asset
-uboot_recovery_source_tag=pzl8-passwall-656ca3f
-uboot_recovery_locked=yes
+uboot_recovery_builder=dtc-vendor-fit-compatible
+uboot_recovery_source_commit=$(git -C "$repo_root" rev-parse HEAD)
+uboot_recovery_locked=no
 uboot_recovery_hash=crc32
 uboot_recovery_compression=gzip
 uboot_recovery_payload_size=$recovery_payload_size
-uboot_recovery_payload_sha256=$UBOOT_RECOVERY_PAYLOAD_SHA256
+uboot_recovery_payload_sha256=$recovery_payload_sha256
 uboot_recovery_uncompressed_size=$recovery_uncompressed_size
+uboot_recovery_rootfs_size=$recovery_rootfs_size
+uboot_recovery_rootfs_lebs=$recovery_rootfs_lebs
 uboot_recovery_decompress_address=0x48000000
 uboot_recovery_chunk_size=$recovery_chunk_size
 uboot_recovery_chunk_count=$recovery_chunk_count
@@ -551,6 +731,7 @@ passwall_core=xray
 passwall_xray_1x_compat=yes
 passwall_vless_first_apply_fix=yes
 passwall_first_enable_autostart_fix=yes
+uboot_recovery_passwall_first_enable_autostart_fix=yes
 passwall_nft_block_action=drop
 passwall_stdin_deadlock_fix=yes
 postboot_ssid_repair=yes

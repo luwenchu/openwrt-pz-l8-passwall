@@ -156,7 +156,7 @@ def main():
     parser.add_argument("--base-status", type=pathlib.Path, required=True)
     parser.add_argument("--root", type=pathlib.Path, required=True)
     parser.add_argument("--remove-package", action="append", default=[])
-    parser.add_argument("packages", nargs="+")
+    parser.add_argument("packages", nargs="*")
     args = parser.parse_args()
 
     args.root.mkdir(parents=True, exist_ok=True)
@@ -255,8 +255,9 @@ def main():
     )
     os.chmod(defaults, 0o755)
 
-    manifest = args.root.parent / "passwall-packages.txt"
-    manifest.write_text("\n".join(selected) + "\n", encoding="utf-8")
+    if args.packages:
+        manifest = args.root.parent / "passwall-packages.txt"
+        manifest.write_text("\n".join(selected) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

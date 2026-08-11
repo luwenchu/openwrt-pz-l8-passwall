@@ -57,10 +57,11 @@ ttyd Web 终端及 ksmbd。由于这版 U-Boot 的单次 gzip `imxtract` 解压�
 8 MiB，recovery 会把 UBI 分为多个不超过 7 MiB 的节点，依次解压到连续 RAM
 后再整体写入。
 
-U-Boot recovery 固件固定复用 `pzl8-passwall-656ca3f` 已验证附件，SHA-256
-必须为
-`027bccc7394d8ae6149cf3a9270747f1a90d1b683b0903dd8a7f2b19207b5fce`。
-构建只扩充 LuCI/Web 升级镜像，不能重新生成或改变该 recovery 文件。
+U-Boot recovery 固件从本次构建的同一份 PassWall 修复文件生成，因此会同步包含
+VLESS 首次应用兼容、nftables 兼容以及首次启用后自动设置开机自启的修复。
+为满足 U-Boot Web 的 32 MiB 限制，recovery 仍单独移除 IPv6 DHCP Relay、
+Quagga、ZeroTier、ttyd 和 ksmbd；这些删减不影响 PassWall、Xray、中文、Argon、
+QSDK 无线或 NSS。
 
 通过 TFTP 加载后可执行：
 
@@ -92,14 +93,14 @@ b2464663e4d0693b5869c277d61542258b3562c40bfed3353faf071155fad7e3
 GitHub Actions 输出：
 
 - `PZL8-2026-08-11-passwall-nft-xray-rootfs-factory.bin`
-- `PZL8-2026-08-11-passwall-nft-xray-uboot-recovery.bin`（锁定原文件）
+- `PZL8-2026-08-11-passwall-nft-xray-uboot-recovery.bin`
 - `sha256sums`
 - `build-manifest.txt`
 - `passwall-packages.txt`
 
 `build-manifest.txt` 会记录基底与成品哈希、UBI 卷参数、overlay 大小、Xray ELF
-架构、Xray 1.x 兼容层、nftables 阻断动作、Web 镜像恢复的软件包、锁定的
-U-Boot recovery 来源和 PassWall 默认状态。
+架构、Xray 1.x 兼容层、nftables 阻断动作、Web 镜像恢复的软件包、动态生成的
+U-Boot recovery 载荷哈希和 PassWall 默认状态。
 
 ## 风险边界
 
