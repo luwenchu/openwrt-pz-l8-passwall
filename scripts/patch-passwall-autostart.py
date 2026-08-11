@@ -10,8 +10,18 @@ PATCH = (
     "\tmap.on_after_commit = function(self)\n"
     "\t\tif old_on_after_commit then old_on_after_commit(self) end\n"
     '\t\tlocal enabled = self:get("@global[0]", "enabled")\n'
-    '\t\tlocal action = enabled == "1" and "enable" or "disable"\n'
-    '\t\tsys.call("/etc/init.d/passwall " .. action .. " >/dev/null 2>&1")\n'
+    '\t\tlocal init_enabled = sys.call("/etc/init.d/passwall enabled >/dev/null 2>&1") == 0\n'
+    '\t\tif enabled == "1" then\n'
+    '\t\t\tsys.call("/etc/init.d/passwall enable >/dev/null 2>&1")\n'
+    '\t\t\tif not init_enabled then\n'
+    '\t\t\t\tsys.call("(/etc/init.d/passwall start </dev/null >/tmp/passwall-first-enable.out 2>&1) &")\n'
+    '\t\t\tend\n'
+    '\t\telse\n'
+    '\t\t\tsys.call("/etc/init.d/passwall disable >/dev/null 2>&1")\n'
+    '\t\t\tif init_enabled then\n'
+    '\t\t\t\tsys.call("(/etc/init.d/passwall stop </dev/null >/tmp/passwall-first-disable.out 2>&1) &")\n'
+    '\t\t\tend\n'
+    '\t\tend\n'
     "\tend\n"
 )
 

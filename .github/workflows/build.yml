@@ -79,6 +79,7 @@ jobs:
           PassWall and Xray are embedded in the repacked SquashFS and disabled by default.
           Xray 1.8.24 compatibility conversion and Linux 5.4 nftables blocking fixes are included.
           PassWall postboot startup closes stdin to prevent nftables pipe deadlocks.
+          First-time PassWall enablement also enables autostart and starts the service immediately.
           PZL8 SSIDs are restored after late QSDK wireless initialization.
           MosDNS and its dedicated v2dat helper are removed to provide rootfs capacity.
           The Web upgrade image retains IPv6 DHCP Relay, Quagga and ZeroTier.

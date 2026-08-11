@@ -188,7 +188,9 @@ grep -Fq 'local old_on_after_commit = map.on_after_commit' \
   "$rootfs/usr/lib/lua/luci/passwall/api.lua"
 grep -Fq 'if map.config ~= appname then return end' \
   "$rootfs/usr/lib/lua/luci/passwall/api.lua"
-grep -Fq 'sys.call("/etc/init.d/passwall " .. action' \
+grep -Fq 'local init_enabled = sys.call("/etc/init.d/passwall enabled' \
+  "$rootfs/usr/lib/lua/luci/passwall/api.lua"
+grep -Fq '/etc/init.d/passwall start </dev/null' \
   "$rootfs/usr/lib/lua/luci/passwall/api.lua"
 sh -n "$rootfs/usr/share/passwall/app.sh"
 if grep -Fq "counter reject" "$rootfs/usr/share/passwall/nftables.sh"; then
@@ -240,7 +242,9 @@ grep -Fq 'local old_on_after_commit = map.on_after_commit' \
   "$recovery_rootfs/usr/lib/lua/luci/passwall/api.lua"
 grep -Fq 'if map.config ~= appname then return end' \
   "$recovery_rootfs/usr/lib/lua/luci/passwall/api.lua"
-grep -Fq 'sys.call("/etc/init.d/passwall " .. action' \
+grep -Fq 'local init_enabled = sys.call("/etc/init.d/passwall enabled' \
+  "$recovery_rootfs/usr/lib/lua/luci/passwall/api.lua"
+grep -Fq '/etc/init.d/passwall start </dev/null' \
   "$recovery_rootfs/usr/lib/lua/luci/passwall/api.lua"
 for recovery_removed_path in \
   usr/sbin/dhcrelay \
@@ -597,13 +601,17 @@ grep -Fq 'local old_on_after_commit = map.on_after_commit' \
   "$work/verify-passwall-api.lua"
 grep -Fq 'if map.config ~= appname then return end' \
   "$work/verify-passwall-api.lua"
-grep -Fq 'sys.call("/etc/init.d/passwall " .. action' \
+grep -Fq 'local init_enabled = sys.call("/etc/init.d/passwall enabled' \
+  "$work/verify-passwall-api.lua"
+grep -Fq '/etc/init.d/passwall start </dev/null' \
   "$work/verify-passwall-api.lua"
 grep -Fq 'local old_on_after_commit = map.on_after_commit' \
   "$work/verify-recovery-passwall-api.lua"
 grep -Fq 'if map.config ~= appname then return end' \
   "$work/verify-recovery-passwall-api.lua"
-grep -Fq 'sys.call("/etc/init.d/passwall " .. action' \
+grep -Fq 'local init_enabled = sys.call("/etc/init.d/passwall enabled' \
+  "$work/verify-recovery-passwall-api.lua"
+grep -Fq '/etc/init.d/passwall start </dev/null' \
   "$work/verify-recovery-passwall-api.lua"
 sh -n "$work/verify-passwall-app.sh"
 cmp "$repo_root/scripts/xray-legacy-compat.lua" \
@@ -731,7 +739,9 @@ passwall_core=xray
 passwall_xray_1x_compat=yes
 passwall_vless_first_apply_fix=yes
 passwall_first_enable_autostart_fix=yes
+passwall_first_enable_immediate_start_fix=yes
 uboot_recovery_passwall_first_enable_autostart_fix=yes
+uboot_recovery_passwall_first_enable_immediate_start_fix=yes
 passwall_nft_block_action=drop
 passwall_stdin_deadlock_fix=yes
 postboot_ssid_repair=yes

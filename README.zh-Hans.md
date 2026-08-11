@@ -21,7 +21,7 @@ PassWall。
 - PassWall 开机兜底启动显式关闭标准输入，避免其 nftables 管道中的 `cat`
   等待 EOF，导致启动流程停在“开始加载 nftables 防火墙规则”。
 - PassWall 客户端配置保存并应用后会把全局开关同步到开机启动项；首次启用即使
-  晚于 90 秒 postboot 检查，也会自动设置开机自启。
+  晚于 90 秒 postboot 检查，也会自动设置开机自启并立即后台启动服务。
 - 包含 PassWall 中文 LuCI 翻译。
 - LuCI 发行版名称和 SSH 登录横幅显示为 `PZL8`。
 - 首次启动时默认无线名称为 `PZL8_2.4G_0` 和 `PZL8_5G_1`。
@@ -58,7 +58,8 @@ ttyd Web 终端及 ksmbd。由于这版 U-Boot 的单次 gzip `imxtract` 解压�
 后再整体写入。
 
 U-Boot recovery 固件从本次构建的同一份 PassWall 修复文件生成，因此会同步包含
-VLESS 首次应用兼容、nftables 兼容以及首次启用后自动设置开机自启的修复。
+VLESS 首次应用兼容、nftables 兼容以及首次启用后自动设置开机自启并立即启动的
+修复。
 为满足 U-Boot Web 的 32 MiB 限制，recovery 仍单独移除 IPv6 DHCP Relay、
 Quagga、ZeroTier、ttyd 和 ksmbd；这些删减不影响 PassWall、Xray、中文、Argon、
 QSDK 无线或 NSS。
